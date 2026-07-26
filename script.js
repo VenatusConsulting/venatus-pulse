@@ -1,7 +1,8 @@
 const STORAGE_ACCOUNTS = "signal_accounts";
 const STORAGE_ENTRIES = "signal_entries";
 
-const SERIES_COLORS = ["#ef4b7a", "#35d6bd", "#f5a623", "#7f77dd", "#5dcaa5", "#d4537e"];
+// one color per channel — reused consistently across chips, pulse traces and charts
+const CHANNEL_COLORS = ["#4ef2a0", "#48d7e8", "#e85fd0", "#f0b545", "#7c9cf0", "#f2685a"];
 
 // --- storage --------------------------------------------------------
 
@@ -40,6 +41,23 @@ function accountName(id) {
   return acc ? acc.name : "?";
 }
 
+function channelColor(accountId) {
+  const idx = accounts.findIndex((a) => a.id === accountId);
+  return CHANNEL_COLORS[(idx < 0 ? 0 : idx) % CHANNEL_COLORS.length];
+}
+
+function escapeHtml(str) {
+  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return String(str ?? "").replace(/[&<>"']/g, (c) => map[c]);
+}
+
+function formatCompact(n) {
+  const v = Number(n) || 0;
+  if (v >= 1000000) return (v / 1000000).toFixed(v % 1000000 === 0 ? 0 : 1).replace(".0", "") + "M";
+  if (v >= 1000) return (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1).replace(".0", "") + "k";
+  return String(v);
+}
+
 // --- account management ----------------------------------------------
 
 function renderAccountChips() {
@@ -48,24 +66,27 @@ function renderAccountChips() {
   if (accounts.length === 0) {
     const p = document.createElement("span");
     p.className = "signal-empty";
-    p.textContent = "Ajoute un premier compte ci-dessous.";
+    p.textContent = "Aucun canal actif. Ajoute un compte ci-dessous.";
     wrap.appendChild(p);
     return;
   }
   accounts.forEach((acc) => {
     const chip = document.createElement("span");
     chip.className = "account-chip";
+    const dot = document.createElement("span");
+    dot.className = "chip-dot";
+    dot.style.background = channelColor(acc.id);
     const label = document.createElement("span");
     label.textContent = acc.name;
     const del = document.createElement("button");
     del.textContent = "\u2715";
-    del.title = "Supprimer ce compte (garde ses entr\u00e9es dans le journal)";
+    del.title = "Supprimer ce compte (garde ses entrées dans le journal)";
     del.addEventListener("click", () => {
       accounts = accounts.filter((a) => a.id !== acc.id);
       saveAccounts(accounts);
       renderAll();
     });
-    chip.append(label, del);
+    chip.append(dot, label, del);
     wrap.appendChild(chip);
   });
 }
@@ -105,27 +126,100 @@ function populateAccountSelects() {
   if ([...logFilter.options].some((o) => o.value === prevLog)) logFilter.value = prevLog;
 }
 
-// --- signal strip (one row per account, bars = views per entry) ------
+// --- console readout ---------------------------------------------------
+
+function updateConsoleReadout() {
+  const el = document.getElementById("console-readout");
+  if (accounts.length === 0) {
+    el.textContent = "AUCUN CANAL — ajoute un compte pour démarrer le suivi";
+    return;
+  }
+  const chanLabel = accounts.length > 1 ? "CANAUX ACTIFS" : "CANAL ACTIF";
+  const entryLabel = entries.length > 1 ? "ENTRÉES" : "ENTRÉE";
+  let lastLabel = "AUCUN SIGNAL";
+  if (entries.length > 0) {
+    const lastDate = entries.map((e) => e.date).sort().slice(-1)[0];
+    lastLabel = "DERNIER SIGNAL " + lastDate;
+  }
+  el.textContent = `${accounts.length} ${chanLabel} · ${entries.length} ${entryLabel} · ${lastLabel}`;
+}
+
+// --- signal strip (signature element: EKG-style pulse trace per account) ---
+
+function buildPulseTrace(accEntries, color) {
+  const W = 600;
+  const H = 100;
+  const padX = 24;
+  const topPad = 16;
+  const baseY = 88;
+
+  if (accEntries.length === 0) {
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pulse-svg">
+      <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" class="pulse-flatline" />
+    </svg>`;
+  }
+
+  const maxViews = Math.max(...accEntries.map((e) => Number(e.views || 0)), 1);
+  const n = accEntries.length;
+  const step = n > 1 ? (W - padX * 2) / (n - 1) : 0;
+
+  const points = accEntries.map((e, i) => {
+    const x = n > 1 ? padX + i * step : W / 2;
+    const v = Number(e.views || 0);
+    const y = baseY - (v / maxViews) * (baseY - topPad);
+    return { x, y, v, e };
+  });
+
+  let peakIdx = 0;
+  points.forEach((p, i) => {
+    if (p.v > points[peakIdx].v) peakIdx = i;
+  });
+  const peak = points[peakIdx];
+
+  const pathPts = [`0,${baseY}`, ...points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`), `${W},${points[n - 1].y.toFixed(1)}`];
+  const d = "M " + pathPts.join(" L ");
+
+  const dots = points
+    .map((p) => {
+      const isPeak = p === peak;
+      const tip = `${escapeHtml(p.e.variant)} \u2014 ${Number(p.v).toLocaleString("fr-FR")} vues (${escapeHtml(p.e.date)})`;
+      return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isPeak ? 4.5 : 2.4}" class="pulse-dot${isPeak ? " pulse-dot-peak" : ""}"><title>${tip}</title></circle>`;
+    })
+    .join("");
+
+  const peakLabel = `<text x="${peak.x.toFixed(1)}" y="${Math.max(peak.y - 9, 10).toFixed(1)}" text-anchor="middle" class="pulse-peak-label">${formatCompact(peak.v)}</text>`;
+
+  const liveDot = `<circle cx="${W}" cy="${points[n - 1].y.toFixed(1)}" r="3.4" class="pulse-live-dot" />`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="pulse-svg" style="--chan-color:${color}">
+    <path d="${d}" class="pulse-line" />
+    ${dots}
+    ${peakLabel}
+    ${liveDot}
+  </svg>`;
+}
 
 function renderSignalStrip() {
   const wrap = document.getElementById("signal-strip");
   wrap.innerHTML = "";
 
   if (accounts.length === 0) {
-    wrap.innerHTML = '<p class="signal-empty">Ajoute un compte pour voir son activit\u00e9 ici.</p>';
+    wrap.innerHTML = '<p class="signal-empty">Ajoute un compte pour voir son activité ici.</p>';
     return;
   }
 
   accounts.forEach((acc) => {
-    const accEntries = entries
-      .filter((e) => e.accountId === acc.id)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    const color = channelColor(acc.id);
+    const accEntries = entries.filter((e) => e.accountId === acc.id).sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const row = document.createElement("div");
     row.className = "signal-row";
 
     const head = document.createElement("div");
     head.className = "signal-row-head";
+    const dot = document.createElement("span");
+    dot.className = "signal-row-dot";
+    dot.style.background = color;
     const name = document.createElement("span");
     name.className = "signal-row-name";
     name.textContent = acc.name;
@@ -136,31 +230,21 @@ function renderSignalStrip() {
       const avg = Math.round(total / accEntries.length);
       stat.textContent = `${accEntries.length} reels \u00b7 moy. ${avg.toLocaleString("fr-FR")} vues`;
     } else {
-      stat.textContent = "aucune entr\u00e9e";
+      stat.textContent = "aucune entrée";
     }
-    head.append(name, stat);
+    head.append(dot, name, stat);
     row.appendChild(head);
 
+    const canvasWrap = document.createElement("div");
+    canvasWrap.className = "signal-row-canvas";
+    canvasWrap.innerHTML = buildPulseTrace(accEntries, color);
     if (accEntries.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "signal-empty";
-      empty.textContent = "Rien enregistr\u00e9 pour ce compte.";
-      row.appendChild(empty);
-    } else {
-      const bars = document.createElement("div");
-      bars.className = "signal-bars";
-      const maxViews = Math.max(...accEntries.map((e) => Number(e.views || 0)), 1);
-      const peakViews = maxViews;
-      accEntries.forEach((e) => {
-        const bar = document.createElement("div");
-        bar.className = "signal-bar" + (Number(e.views || 0) === peakViews ? " is-peak" : "");
-        const heightPct = Math.max(6, (Number(e.views || 0) / maxViews) * 100);
-        bar.style.height = `${heightPct}%`;
-        bar.title = `${e.variant} \u2014 ${Number(e.views || 0).toLocaleString("fr-FR")} vues (${e.date})`;
-        bars.appendChild(bar);
-      });
-      row.appendChild(bars);
+      const empty = document.createElement("span");
+      empty.className = "signal-row-empty-label";
+      empty.textContent = "Pas encore de signal pour ce compte.";
+      canvasWrap.appendChild(empty);
     }
+    row.appendChild(canvasWrap);
 
     wrap.appendChild(row);
   });
@@ -177,6 +261,7 @@ function renderVariantChart() {
 
   const labels = filtered.map((e) => (filter === "all" ? `${e.variant} (${accountName(e.accountId)})` : e.variant));
   const data = filtered.map((e) => Number(e.views || 0));
+  const colors = filtered.map((e) => channelColor(e.accountId));
 
   if (variantChart) variantChart.destroy();
   variantChart = new Chart(canvas, {
@@ -187,7 +272,7 @@ function renderVariantChart() {
         {
           label: "Vues",
           data,
-          backgroundColor: "#ef4b7a",
+          backgroundColor: colors,
           borderRadius: 4,
           maxBarThickness: 22,
         },
@@ -199,8 +284,8 @@ function renderVariantChart() {
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: "#a49bb8" }, grid: { color: "#322c3d" } },
-        y: { ticks: { color: "#f0ecf7", font: { size: 11 } }, grid: { display: false } },
+        x: { ticks: { color: "#7fa89a" }, grid: { color: "#16332b" } },
+        y: { ticks: { color: "#eaf6ef", font: { size: 11 } }, grid: { display: false } },
       },
     },
   });
@@ -215,16 +300,19 @@ function renderTrendChart() {
 
   let datasets = [];
   if (filter === "all") {
-    datasets = accounts.map((acc, idx) => {
+    datasets = accounts.map((acc) => {
       const byDate = {};
-      entries.filter((e) => e.accountId === acc.id).forEach((e) => {
-        byDate[e.date] = Number(e.views || 0);
-      });
+      entries
+        .filter((e) => e.accountId === acc.id)
+        .forEach((e) => {
+          byDate[e.date] = Number(e.views || 0);
+        });
+      const color = channelColor(acc.id);
       return {
         label: acc.name,
         data: uniqueDates.map((d) => (byDate[d] !== undefined ? byDate[d] : null)),
-        borderColor: SERIES_COLORS[idx % SERIES_COLORS.length],
-        backgroundColor: SERIES_COLORS[idx % SERIES_COLORS.length],
+        borderColor: color,
+        backgroundColor: color,
         tension: 0.3,
         pointRadius: 3,
         spanGaps: true,
@@ -232,15 +320,18 @@ function renderTrendChart() {
     });
   } else {
     const byDate = {};
-    entries.filter((e) => e.accountId === filter).forEach((e) => {
-      byDate[e.date] = Number(e.views || 0);
-    });
+    entries
+      .filter((e) => e.accountId === filter)
+      .forEach((e) => {
+        byDate[e.date] = Number(e.views || 0);
+      });
+    const color = channelColor(filter);
     datasets = [
       {
         label: accountName(filter),
         data: uniqueDates.map((d) => byDate[d]),
-        borderColor: "#ef4b7a",
-        backgroundColor: "#ef4b7a",
+        borderColor: color,
+        backgroundColor: color,
         tension: 0.3,
         pointRadius: 3,
       },
@@ -257,12 +348,12 @@ function renderTrendChart() {
       plugins: {
         legend: {
           display: filter === "all",
-          labels: { color: "#f0ecf7", boxWidth: 10, font: { size: 11 } },
+          labels: { color: "#eaf6ef", boxWidth: 10, font: { size: 11 } },
         },
       },
       scales: {
-        x: { ticks: { color: "#a49bb8" }, grid: { color: "#322c3d" } },
-        y: { ticks: { color: "#a49bb8" }, grid: { color: "#322c3d" } },
+        x: { ticks: { color: "#7fa89a" }, grid: { color: "#16332b" } },
+        y: { ticks: { color: "#7fa89a" }, grid: { color: "#16332b" } },
       },
     },
   });
@@ -295,20 +386,20 @@ function renderLogTable() {
     const tr = document.createElement("tr");
     const isPeak = Number(e.views || 0) === maxByAccount[e.accountId] && Number(e.views || 0) > 0;
     tr.innerHTML = `
-      <td>${e.date}</td>
-      <td>${accountName(e.accountId)}</td>
-      <td>${e.variant}</td>
+      <td>${escapeHtml(e.date)}</td>
+      <td>${escapeHtml(accountName(e.accountId))}</td>
+      <td>${escapeHtml(e.variant)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.comments || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.shares || 0).toLocaleString("fr-FR")}</td>
-      <td class="notes-cell">${e.notes || ""}</td>
+      <td class="notes-cell">${escapeHtml(e.notes || "")}</td>
     `;
     const delTd = document.createElement("td");
     const delBtn = document.createElement("button");
     delBtn.className = "row-delete";
     delBtn.textContent = "\u2715";
-    delBtn.title = "Supprimer cette entr\u00e9e";
+    delBtn.title = "Supprimer cette entrée";
     delBtn.addEventListener("click", () => {
       entries = entries.filter((x) => x.id !== e.id);
       saveEntries(entries);
@@ -325,6 +416,7 @@ function renderLogTable() {
 function renderAll() {
   renderAccountChips();
   populateAccountSelects();
+  updateConsoleReadout();
   renderSignalStrip();
   renderVariantChart();
   renderTrendChart();
