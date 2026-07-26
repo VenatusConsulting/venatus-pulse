@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -16,8 +16,11 @@
     <div class="app">
       <aside class="rail">
         <div class="brand">
-          <h1>Venatus Pulse</h1>
-          <p class="brand-sub">Suivi des comptes trafic</p>
+          <div>
+            <h1>Venatus Pulse</h1>
+            <p class="brand-sub">Suivi des comptes trafic</p>
+          </div>
+          <span class="rec-badge"><span class="rec-dot"></span>LIVE</span>
         </div>
 
         <section class="rail-section">
@@ -64,21 +67,25 @@
             </div>
             <label>
               Notes
-              <textarea id="entry-notes" placeholder="ce qui a march\u00e9 ou pas, contexte..."></textarea>
+              <textarea id="entry-notes" placeholder="ce qui a marché ou pas, contexte..."></textarea>
             </label>
-            <button type="submit" class="btn-primary">Enregistrer l'entr\u00e9e</button>
+            <button type="submit" class="btn-primary">Enregistrer l'entrée</button>
           </form>
         </section>
       </aside>
 
       <main class="canvas">
         <section class="signal-strip-section">
+          <div class="console-line">
+            <span class="rec-dot"></span>
+            <span id="console-readout">chargement…</span>
+          </div>
           <h2>Pouls des comptes</h2>
           <div id="signal-strip" class="signal-strip"></div>
         </section>
 
         <section class="chart-section">
-          <div class="chart-card">
+          <div class="chart-card bracket">
             <div class="chart-card-head">
               <h2>Variantes les plus vues</h2>
               <select id="chart-account-filter"></select>
@@ -87,7 +94,7 @@
               <canvas id="variant-chart"></canvas>
             </div>
           </div>
-          <div class="chart-card">
+          <div class="chart-card bracket">
             <h2>Tendance dans le temps</h2>
             <div class="chart-wrap chart-wrap-line">
               <canvas id="trend-chart"></canvas>
@@ -100,7 +107,7 @@
             <h2>Journal complet</h2>
             <select id="log-account-filter"></select>
           </div>
-          <div class="log-table-wrap">
+          <div class="log-table-wrap bracket">
             <table id="log-table">
               <thead>
                 <tr>
@@ -117,7 +124,7 @@
               </thead>
               <tbody id="log-body"></tbody>
             </table>
-            <p id="log-empty" class="log-empty" style="display: none">Aucune entr\u00e9e pour l'instant. Ajoute ta premi\u00e8re publication \u00e0 gauche.</p>
+            <p id="log-empty" class="log-empty" style="display: none">Aucune entrée pour l'instant. Ajoute ta première publication à gauche.</p>
           </div>
         </section>
       </main>
