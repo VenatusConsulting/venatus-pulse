@@ -1,0 +1,425 @@
+:root {
+  --ink: #14121a;
+  --panel: #1d1a26;
+  --panel-raised: #252030;
+  --line: #322c3d;
+  --paper: #f0ecf7;
+  --paper-dim: #a49bb8;
+  --signal: #ef4b7a;
+  --signal-dim: rgba(239, 75, 122, 0.14);
+  --current: #35d6bd;
+  --current-dim: rgba(53, 214, 189, 0.14);
+  --flag: #f5a623;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-data: "IBM Plex Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* --- rail ---------------------------------------------------------- */
+
+.rail {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.brand h1 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.brand-sub {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+.rail-section h2 {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--paper-dim);
+  margin: 0 0 10px 0;
+}
+
+.rail-section-grow {
+  flex: 1;
+}
+
+.account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 5px 10px 5px 12px;
+  font-size: 12px;
+  font-family: var(--font-data);
+}
+
+.account-chip button {
+  background: transparent;
+  border: none;
+  color: var(--paper-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  line-height: 1;
+}
+
+.account-chip button:hover {
+  color: var(--signal);
+}
+
+.add-row {
+  display: flex;
+  gap: 6px;
+}
+
+.add-row input {
+  flex: 1;
+}
+
+.btn-icon {
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  color: var(--paper);
+  width: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+/* --- form ------------------------------------------------------------ */
+
+.entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entry-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--paper-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.entry-form input,
+.entry-form select,
+.entry-form textarea {
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--paper);
+  font-family: var(--font-data);
+  font-size: 13px;
+  padding: 9px 10px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.entry-form textarea {
+  font-family: var(--font-body);
+  min-height: 60px;
+  resize: vertical;
+}
+
+.entry-form input:focus,
+.entry-form select:focus,
+.entry-form textarea:focus {
+  outline: none;
+  border-color: var(--signal);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.btn-primary {
+  background: var(--signal);
+  border: none;
+  color: #2a0a16;
+  font-weight: 600;
+  font-family: var(--font-body);
+  padding: 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* --- canvas ------------------------------------------------------------ */
+
+.canvas {
+  flex: 1;
+  padding: 32px 36px 60px;
+  max-width: 1100px;
+}
+
+.canvas h2 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 14px 0;
+}
+
+/* --- signal strip (signature element) --------------------------------- */
+
+.signal-strip-section {
+  margin-bottom: 34px;
+}
+
+.signal-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.signal-row {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.signal-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.signal-row-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.signal-row-stat {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--paper-dim);
+}
+
+.signal-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 46px;
+}
+
+.signal-bar {
+  flex: 1;
+  min-width: 4px;
+  background: var(--line);
+  border-radius: 2px 2px 0 0;
+  position: relative;
+}
+
+.signal-bar.is-peak {
+  background: var(--signal);
+}
+
+.signal-empty {
+  font-size: 12px;
+  color: var(--paper-dim);
+  font-style: italic;
+}
+
+/* --- charts ------------------------------------------------------------ */
+
+.chart-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 34px;
+}
+
+.chart-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.chart-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.chart-card-head h2 {
+  margin: 0;
+}
+
+.chart-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.chart-wrap-bar {
+  height: 220px;
+}
+
+.chart-wrap-line {
+  height: 220px;
+}
+
+select {
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  color: var(--paper);
+  font-family: var(--font-data);
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+/* --- log table ------------------------------------------------------- */
+
+.log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.log-head h2 {
+  margin: 0;
+}
+
+.log-table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+thead th {
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--paper-dim);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+
+tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-data);
+  vertical-align: top;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+td.notes-cell {
+  font-family: var(--font-body);
+  color: var(--paper-dim);
+  max-width: 220px;
+}
+
+td.peak-views {
+  color: var(--signal);
+  font-weight: 500;
+}
+
+.row-delete {
+  background: transparent;
+  border: none;
+  color: var(--paper-dim);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.row-delete:hover {
+  color: var(--signal);
+}
+
+.log-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--paper-dim);
+  font-size: 13px;
+}
+
+@media (max-width: 860px) {
+  .app {
+    flex-direction: column;
+  }
+  .rail {
+    position: static;
+    height: auto;
+    width: auto;
+  }
+  .chart-section {
+    grid-template-columns: 1fr;
+  }
+}
