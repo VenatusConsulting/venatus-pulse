@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Venatus Pulse — suivi de contenu</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="rail">
+        <div class="brand">
+          <h1>Venatus Pulse</h1>
+          <p class="brand-sub">Suivi des comptes trafic</p>
+        </div>
+
+        <section class="rail-section">
+          <h2>Comptes</h2>
+          <div id="account-chips" class="account-chips"></div>
+          <div class="add-row">
+            <input type="text" id="new-account-input" placeholder="nom_du_compte" />
+            <button id="add-account-btn" class="btn-icon" aria-label="Ajouter un compte">+</button>
+          </div>
+        </section>
+
+        <section class="rail-section rail-section-grow">
+          <h2>Nouvelle entrée</h2>
+          <form id="entry-form" class="entry-form">
+            <label>
+              Compte
+              <select id="entry-account" required></select>
+            </label>
+            <label>
+              Date
+              <input type="date" id="entry-date" required />
+            </label>
+            <label>
+              Variante / concept
+              <input type="text" id="entry-variant" placeholder="ex : hook question, POV, transition..." required />
+            </label>
+            <div class="metric-grid">
+              <label>
+                Vues
+                <input type="number" id="entry-views" min="0" value="0" required />
+              </label>
+              <label>
+                Likes
+                <input type="number" id="entry-likes" min="0" value="0" />
+              </label>
+              <label>
+                Comm.
+                <input type="number" id="entry-comments" min="0" value="0" />
+              </label>
+              <label>
+                Partages
+                <input type="number" id="entry-shares" min="0" value="0" />
+              </label>
+            </div>
+            <label>
+              Notes
+              <textarea id="entry-notes" placeholder="ce qui a march\u00e9 ou pas, contexte..."></textarea>
+            </label>
+            <button type="submit" class="btn-primary">Enregistrer l'entr\u00e9e</button>
+          </form>
+        </section>
+      </aside>
+
+      <main class="canvas">
+        <section class="signal-strip-section">
+          <h2>Pouls des comptes</h2>
+          <div id="signal-strip" class="signal-strip"></div>
+        </section>
+
+        <section class="chart-section">
+          <div class="chart-card">
+            <div class="chart-card-head">
+              <h2>Variantes les plus vues</h2>
+              <select id="chart-account-filter"></select>
+            </div>
+            <div class="chart-wrap chart-wrap-bar">
+              <canvas id="variant-chart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h2>Tendance dans le temps</h2>
+            <div class="chart-wrap chart-wrap-line">
+              <canvas id="trend-chart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section class="log-section">
+          <div class="log-head">
+            <h2>Journal complet</h2>
+            <select id="log-account-filter"></select>
+          </div>
+          <div class="log-table-wrap">
+            <table id="log-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Compte</th>
+                  <th>Variante</th>
+                  <th>Vues</th>
+                  <th>Likes</th>
+                  <th>Comm.</th>
+                  <th>Partages</th>
+                  <th>Notes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="log-body"></tbody>
+            </table>
+            <p id="log-empty" class="log-empty" style="display: none">Aucune entr\u00e9e pour l'instant. Ajoute ta premi\u00e8re publication \u00e0 gauche.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
