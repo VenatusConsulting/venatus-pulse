@@ -609,6 +609,10 @@ body {
   margin-top: 18px;
 }
 
+.compare-section {
+  margin-top: 40px;
+}
+
 .model-card {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -136,6 +136,7 @@ let models = loadModels();
 
 let trendChart = null;
 let insightsCharts = {}; // { hook: Chart, format: Chart, ... }
+let compareCharts = {}; // same shape, for the cross-model Comparer section
 let conversionViewsChart = null;
 let conversionMetricsChart = null;
 
@@ -147,6 +148,9 @@ let currentAccountId = null;
 // Insights tab state
 let insightsMetric = "views"; // "views" | "engagement"
 let insightsSort = "views"; // "views" | "engagement"
+
+// Comparer section state (on the Modèles page)
+let compareMetric = "views"; // "views" | "engagement"
 
 // active tab within the account view
 let activeTab = "dashboard";
@@ -423,11 +427,91 @@ function renderModelsView() {
 
   if (names.length === 0 && !hasOrphans) {
     grid.innerHTML = '<p class="empty-hint">Aucune modèle pour l\'instant. Clique sur "+ Nouvelle modèle" pour commencer.</p>';
-    return;
+  } else {
+    names.forEach((niche) => grid.appendChild(buildModelCard(niche, niche)));
+    if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
   }
 
-  names.forEach((niche) => grid.appendChild(buildModelCard(niche, niche)));
-  if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
+  renderCompareSection();
+}
+
+// --- cross-model comparison (which niche/tag wins across everyone) ---------
+
+function renderCompareSection() {
+  const allEntries = entries.slice();
+  const emptyMsg = document.getElementById("compare-empty");
+  const content = document.getElementById("compare-content");
+
+  if (allEntries.length === 0) {
+    emptyMsg.style.display = "block";
+    content.style.display = "none";
+    TAG_AXES.forEach((axis) => {
+      if (compareCharts[axis]) {
+        compareCharts[axis].destroy();
+        compareCharts[axis] = null;
+      }
+    });
+    return;
+  }
+  emptyMsg.style.display = "none";
+  content.style.display = "block";
+
+  TAG_AXES.forEach((axis) => renderCompareAxisChart(axis, allEntries));
+  renderNicheLeaderboard();
+}
+
+function renderCompareAxisChart(axis, allEntries) {
+  renderAxisChart(document.getElementById(`compare-chart-${axis}`), compareCharts, axis, allEntries, compareMetric);
+}
+
+function renderNicheLeaderboard() {
+  const body = document.getElementById("compare-niche-body");
+  const emptyMsg = document.getElementById("compare-niche-empty");
+  body.innerHTML = "";
+
+  const names = allModelNames();
+  const hasOrphans = accounts.some((a) => !a.niche || !a.niche.trim());
+  const niches = hasOrphans ? [...names, ""] : names;
+
+  const rows = niches
+    .map((niche) => {
+      const accs = accountsForNiche(niche);
+      const accIds = new Set(accs.map((a) => a.id));
+      const entriesList = entries.filter((e) => accIds.has(e.accountId));
+      if (entriesList.length === 0) return null;
+      const stats = computeModelStats(niche);
+      return {
+        name: niche === "" ? "Sans modèle" : niche,
+        accountCount: accs.length,
+        totalViews: stats.totalViews,
+        avgViews: stats.totalViews / entriesList.length,
+        avgEngagement: stats.avgEngagement,
+        bestAccountName: stats.bestAccountName,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.avgViews - a.avgViews);
+
+  if (rows.length === 0) {
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+
+  rows.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    const rankClass = i === 0 ? "rank-badge rank-1" : "";
+    tr.innerHTML = `
+      <td class="${rankClass}">${i + 1}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${r.accountCount}</td>
+      <td>${formatCompact(r.totalViews)}</td>
+      <td>${formatCompact(Math.round(r.avgViews))}</td>
+      <td>${formatPercent(r.avgEngagement)}</td>
+      <td>${escapeHtml(r.bestAccountName)}</td>
+    `;
+    body.appendChild(tr);
+  });
 }
 
 function buildModelCard(niche, displayName) {
@@ -893,7 +977,7 @@ function cancelEditEntry() {
 
 // --- insights tab (single account) ------------------------------------------
 
-function computeAxisBreakdown(axis, filteredEntries) {
+function computeAxisBreakdown(axis, filteredEntries, metric) {
   const groups = {};
   filteredEntries.forEach((e) => {
     const val = (e.tags && e.tags[axis]) || TAG_UNCLASSIFIED;
@@ -908,20 +992,21 @@ function computeAxisBreakdown(axis, filteredEntries) {
     avgViews: g.totalViews / g.count,
     avgEngagement: g.totalEngagement / g.count,
   }));
-  rows.sort((a, b) => (insightsMetric === "engagement" ? b.avgEngagement - a.avgEngagement : b.avgViews - a.avgViews));
+  rows.sort((a, b) => (metric === "engagement" ? b.avgEngagement - a.avgEngagement : b.avgViews - a.avgViews));
   return rows;
 }
 
-function renderInsightsAxisChart(axis, filteredEntries) {
-  const canvas = document.getElementById(`insights-chart-${axis}`);
-  const rows = computeAxisBreakdown(axis, filteredEntries).slice(0, 8);
-  if (insightsCharts[axis]) insightsCharts[axis].destroy();
+// shared by the per-account Insights tab and the cross-model Comparer section —
+// only the canvas, the chart-instance store and the entry scope differ.
+function renderAxisChart(canvas, chartsStore, axis, filteredEntries, metric) {
+  const rows = computeAxisBreakdown(axis, filteredEntries, metric).slice(0, 8);
+  if (chartsStore[axis]) chartsStore[axis].destroy();
 
   const color = CHANNEL_COLORS[TAG_AXES.indexOf(axis) % CHANNEL_COLORS.length];
   const labels = rows.map((r) => r.tag);
-  const data = rows.map((r) => (insightsMetric === "engagement" ? r.avgEngagement * 100 : r.avgViews));
+  const data = rows.map((r) => (metric === "engagement" ? r.avgEngagement * 100 : r.avgViews));
 
-  insightsCharts[axis] = new Chart(canvas, {
+  chartsStore[axis] = new Chart(canvas, {
     type: "bar",
     data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 4, maxBarThickness: 18 }] },
     options: {
@@ -934,7 +1019,7 @@ function renderInsightsAxisChart(axis, filteredEntries) {
           callbacks: {
             label: (ctx) => {
               const row = rows[ctx.dataIndex];
-              const val = insightsMetric === "engagement" ? formatPercent(row.avgEngagement) : formatCompact(row.avgViews) + " vues";
+              const val = metric === "engagement" ? formatPercent(row.avgEngagement) : formatCompact(row.avgViews) + " vues";
               return `${val} moy. (${row.count} vidéo${row.count > 1 ? "s" : ""})`;
             },
           },
@@ -946,6 +1031,10 @@ function renderInsightsAxisChart(axis, filteredEntries) {
       },
     },
   });
+}
+
+function renderInsightsAxisChart(axis, filteredEntries) {
+  renderAxisChart(document.getElementById(`insights-chart-${axis}`), insightsCharts, axis, filteredEntries, insightsMetric);
 }
 
 function renderInsightsLeaderboard(filteredEntries) {
@@ -1219,6 +1308,11 @@ document.getElementById("model-accounts").addEventListener("keydown", (e) => {
 setupSegmented("insights-metric-toggle", (value) => {
   insightsMetric = value;
   renderInsights();
+});
+
+setupSegmented("compare-metric-toggle", (value) => {
+  compareMetric = value;
+  renderCompareSection();
 });
 
 document.getElementById("insights-leaderboard-sort").addEventListener("change", (e) => {

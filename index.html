@@ -116,6 +116,66 @@
           </div>
           <button type="button" id="add-model-btn" class="btn-primary">+ Nouvelle modèle</button>
           <div class="models-grid" id="models-grid"></div>
+
+          <div class="compare-section" id="compare-section">
+            <div class="insights-head">
+              <h2 class="section-title">Comparaison entre modèles</h2>
+              <div class="segmented" id="compare-metric-toggle">
+                <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
+                <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
+              </div>
+            </div>
+
+            <p id="compare-empty" class="empty-hint" style="display: none">Pas encore assez de données pour comparer.</p>
+
+            <div id="compare-content">
+              <div class="insights-grid" id="compare-tags-grid">
+                <div class="chart-card chart-card-mini">
+                  <h2 class="section-title section-title-sm">Hook</h2>
+                  <div class="chart-wrap chart-wrap-mini"><canvas id="compare-chart-hook"></canvas></div>
+                </div>
+                <div class="chart-card chart-card-mini">
+                  <h2 class="section-title section-title-sm">Format</h2>
+                  <div class="chart-wrap chart-wrap-mini"><canvas id="compare-chart-format"></canvas></div>
+                </div>
+                <div class="chart-card chart-card-mini">
+                  <h2 class="section-title section-title-sm">Longueur</h2>
+                  <div class="chart-wrap chart-wrap-mini"><canvas id="compare-chart-longueur"></canvas></div>
+                </div>
+                <div class="chart-card chart-card-mini">
+                  <h2 class="section-title section-title-sm">CTA</h2>
+                  <div class="chart-wrap chart-wrap-mini"><canvas id="compare-chart-cta"></canvas></div>
+                </div>
+                <div class="chart-card chart-card-mini">
+                  <h2 class="section-title section-title-sm">Son</h2>
+                  <div class="chart-wrap chart-wrap-mini"><canvas id="compare-chart-son"></canvas></div>
+                </div>
+              </div>
+
+              <div class="table-card">
+                <div class="table-card-head">
+                  <h2 class="section-title">Classement des modèles</h2>
+                </div>
+                <div class="table-wrap">
+                  <table id="compare-niche-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Modèle</th>
+                        <th>Comptes</th>
+                        <th>Vues totales</th>
+                        <th>Vues moy./reel</th>
+                        <th>Engagement moyen</th>
+                        <th>Meilleur compte</th>
+                      </tr>
+                    </thead>
+                    <tbody id="compare-niche-body"></tbody>
+                  </table>
+                  <p id="compare-niche-empty" class="empty-hint" style="display: none">Aucune donnée pour l'instant.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="page-header" id="scoped-header" hidden>
