@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -18,17 +18,31 @@
         <div class="brand">
           <div>
             <h1>Venatus Pulse</h1>
-            <p class="brand-sub">Suivi des comptes trafic</p>
+            <p class="brand-sub">Trafic &amp; créatrices — suivi de contenu</p>
           </div>
           <span class="rec-badge"><span class="rec-dot"></span>LIVE</span>
         </div>
 
         <section class="rail-section">
           <h2>Comptes</h2>
+
+          <div class="segmented segmented-block" id="category-filter">
+            <button type="button" class="segmented-option is-active" data-category="all">Tous</button>
+            <button type="button" class="segmented-option" data-category="trafic">Trafic</button>
+            <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
+          </div>
+
           <div id="account-chips" class="account-chips"></div>
-          <div class="add-row">
-            <input type="text" id="new-account-input" placeholder="nom_du_compte" />
-            <button id="add-account-btn" class="btn-icon" aria-label="Ajouter un compte">+</button>
+
+          <div class="add-account-block">
+            <div class="segmented segmented-block" id="new-account-category">
+              <button type="button" class="segmented-option is-active" data-category="trafic">Trafic</button>
+              <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
+            </div>
+            <div class="add-row">
+              <input type="text" id="new-account-input" placeholder="nom_du_compte" />
+              <button id="add-account-btn" class="btn-icon" aria-label="Ajouter un compte">+</button>
+            </div>
           </div>
         </section>
 
@@ -85,7 +99,7 @@
         </section>
 
         <section class="chart-section">
-          <div class="chart-card bracket">
+          <div class="chart-card">
             <div class="chart-card-head">
               <h2>Variantes les plus vues</h2>
               <select id="chart-account-filter"></select>
@@ -94,7 +108,7 @@
               <canvas id="variant-chart"></canvas>
             </div>
           </div>
-          <div class="chart-card bracket">
+          <div class="chart-card">
             <h2>Tendance dans le temps</h2>
             <div class="chart-wrap chart-wrap-line">
               <canvas id="trend-chart"></canvas>
@@ -107,7 +121,7 @@
             <h2>Journal complet</h2>
             <select id="log-account-filter"></select>
           </div>
-          <div class="log-table-wrap bracket">
+          <div class="log-table-wrap">
             <table id="log-table">
               <thead>
                 <tr>
