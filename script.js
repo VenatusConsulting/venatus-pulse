@@ -18,6 +18,9 @@ const CHART_LEGEND = "#111827";
 const TAG_AXES = ["hook", "format", "longueur", "cta", "son"];
 const TAG_UNCLASSIFIED = "Non classé";
 const TAG_AXIS_LABELS = { hook: "Hook", format: "Format", longueur: "Longueur", cta: "CTA", son: "Son" };
+
+const ACCOUNT_STATUS_LABELS = { actif: "Actif", pause: "En pause", shadowban: "Shadowban", banni: "Banni" };
+const ACCOUNT_STATUSES = ["actif", "pause", "shadowban", "banni"];
 const PREDEFINED_TAGS = {
   hook: ["Question", "Pattern interrupt", "Storytime", "POV", "Avant/Après", "Statistique choc", "Controverse", "Autre"],
   format: ["Talking head", "Voix off", "Greenscreen", "Transition", "Texte à l'écran", "Duo/Stitch", "Autre"],
@@ -31,11 +34,16 @@ const PREDEFINED_TAGS = {
 function loadAccounts() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_ACCOUNTS)) || [];
-    // normalize: niche defaults to "" — so pre-existing data keeps working without loss.
+    // normalize: defaults for every field so pre-existing data keeps working without loss.
     // (category is a leftover field on older records; no longer read anywhere)
     return raw.map((a) => ({
       ...a,
       niche: typeof a.niche === "string" ? a.niche : "",
+      createdDate: typeof a.createdDate === "string" ? a.createdDate : "",
+      creationMethod: typeof a.creationMethod === "string" ? a.creationMethod : "",
+      status: ACCOUNT_STATUSES.includes(a.status) ? a.status : "actif",
+      warmup: typeof a.warmup === "string" ? a.warmup : "",
+      accountNotes: typeof a.accountNotes === "string" ? a.accountNotes : "",
     }));
   } catch {
     return [];
@@ -145,6 +153,9 @@ let activeTab = "dashboard";
 
 // id of the entry currently being edited via the sidebar form, or null when adding a new one
 let editingEntryId = null;
+
+// whether the "Infos du compte" card is in edit mode
+let editingAccountInfo = false;
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -355,6 +366,7 @@ function goToModels() {
   currentNiche = null;
   currentAccountId = null;
   editingEntryId = null;
+  editingAccountInfo = false;
   renderCurrentView();
 }
 
@@ -363,6 +375,7 @@ function goToModel(niche) {
   currentNiche = niche === "" ? "" : resolveNicheCasing(niche);
   currentAccountId = null;
   editingEntryId = null;
+  editingAccountInfo = false;
   renderCurrentView();
 }
 
@@ -374,6 +387,7 @@ function goToAccount(accountId) {
   currentNiche = acc.niche || "";
   activeTab = "dashboard";
   editingEntryId = null;
+  editingAccountInfo = false;
   renderCurrentView();
 }
 
@@ -483,6 +497,9 @@ function renderModelAccountCards(niche) {
     const name = document.createElement("span");
     name.className = "signal-row-name";
     name.textContent = acc.name;
+    const statusBadge = document.createElement("span");
+    statusBadge.className = `status-badge status-${acc.status}`;
+    statusBadge.textContent = ACCOUNT_STATUS_LABELS[acc.status];
     const stat = document.createElement("span");
     stat.className = "signal-row-stat";
     if (accEntries.length > 0) {
@@ -496,7 +513,7 @@ function renderModelAccountCards(niche) {
     del.className = "row-delete account-card-delete";
     del.textContent = "✕";
     del.title = "Supprimer ce compte";
-    head.append(dot, name, stat, del);
+    head.append(dot, name, statusBadge, stat, del);
     card.appendChild(head);
 
     const canvasWrap = document.createElement("div");
@@ -557,10 +574,65 @@ function renderAccountView() {
   setStatSlot("c", "Meilleur reel", stats.bestEntryLabel);
   setStatSlot("d", "Nouveaux abonnés", stats.totalNewSubs.toLocaleString("fr-FR"));
 
+  renderAccountInfo(acc);
+  document.getElementById("account-info-view").hidden = editingAccountInfo;
+  document.getElementById("account-info-form").hidden = !editingAccountInfo;
+  document.getElementById("account-info-edit-btn").hidden = editingAccountInfo;
+
   populateTagSelects();
   document.getElementById("entry-form-submit").textContent = editingEntryId ? "Mettre à jour l'entrée" : "Enregistrer l'entrée";
   document.getElementById("entry-form-cancel").hidden = !editingEntryId;
   renderActiveTab();
+}
+
+// --- account info card (creation date/method, status, warm-up, notes) ------
+
+function renderAccountInfo(acc) {
+  const view = document.getElementById("account-info-view");
+  const created = acc.createdDate ? `${escapeHtml(acc.createdDate)} · ${daysSince(acc.createdDate)} j` : "—";
+  view.innerHTML = `
+    <div class="info-item">
+      <span class="info-label">Créé le</span>
+      <span class="info-value">${created}</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Créé via</span>
+      <span class="info-value">${escapeHtml(acc.creationMethod || "—")}</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Statut</span>
+      <span class="status-badge status-${acc.status}">${escapeHtml(ACCOUNT_STATUS_LABELS[acc.status])}</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Warm-up</span>
+      <span class="info-value">${escapeHtml(acc.warmup || "—")}</span>
+    </div>
+    <div class="info-item info-item-full">
+      <span class="info-label">Notes</span>
+      <span class="info-value">${escapeHtml(acc.accountNotes || "—")}</span>
+    </div>
+  `;
+}
+
+function startEditAccountInfo() {
+  const acc = accounts.find((a) => a.id === currentAccountId);
+  if (!acc) return;
+  editingAccountInfo = true;
+  document.getElementById("account-info-created").value = acc.createdDate || "";
+  document.getElementById("account-info-method").value = acc.creationMethod || "";
+  document.getElementById("account-info-status").value = acc.status || "actif";
+  document.getElementById("account-info-warmup").value = acc.warmup || "";
+  document.getElementById("account-info-notes").value = acc.accountNotes || "";
+  document.getElementById("account-info-view").hidden = true;
+  document.getElementById("account-info-form").hidden = false;
+  document.getElementById("account-info-edit-btn").hidden = true;
+}
+
+function cancelEditAccountInfo() {
+  editingAccountInfo = false;
+  document.getElementById("account-info-view").hidden = false;
+  document.getElementById("account-info-form").hidden = true;
+  document.getElementById("account-info-edit-btn").hidden = false;
 }
 
 function populateTagSelects() {
@@ -1207,6 +1279,22 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
 
 document.getElementById("entry-form-cancel").addEventListener("click", () => {
   cancelEditEntry();
+});
+
+document.getElementById("account-info-edit-btn").addEventListener("click", startEditAccountInfo);
+document.getElementById("account-info-cancel").addEventListener("click", cancelEditAccountInfo);
+document.getElementById("account-info-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const acc = accounts.find((a) => a.id === currentAccountId);
+  if (!acc) return;
+  acc.createdDate = document.getElementById("account-info-created").value;
+  acc.creationMethod = document.getElementById("account-info-method").value.trim();
+  acc.status = document.getElementById("account-info-status").value;
+  acc.warmup = document.getElementById("account-info-warmup").value.trim();
+  acc.accountNotes = document.getElementById("account-info-notes").value.trim();
+  saveAccounts(accounts);
+  cancelEditAccountInfo();
+  renderCurrentView();
 });
 
 document.getElementById("conversion-form").addEventListener("submit", (e) => {

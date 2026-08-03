@@ -147,6 +147,45 @@
         </div>
 
         <div class="view" id="view-account" hidden>
+          <div class="info-card">
+            <div class="info-card-head">
+              <h2 class="section-title">Infos du compte</h2>
+              <button type="button" class="btn-text" id="account-info-edit-btn">✎ Modifier</button>
+            </div>
+            <div id="account-info-view" class="info-grid"></div>
+            <form id="account-info-form" class="account-info-form" hidden>
+              <label>
+                Créé le
+                <input type="date" id="account-info-created" />
+              </label>
+              <label>
+                Créé via
+                <input type="text" id="account-info-method" placeholder="Téléphone, Venatus FM + Chrome..." />
+              </label>
+              <label>
+                Statut
+                <select id="account-info-status">
+                  <option value="actif">Actif</option>
+                  <option value="pause">En pause</option>
+                  <option value="shadowban">Shadowban</option>
+                  <option value="banni">Banni</option>
+                </select>
+              </label>
+              <label>
+                Warm-up (durée / méthode)
+                <input type="text" id="account-info-warmup" placeholder="Ex : 5 jours, manuel + proxy résidentiel" />
+              </label>
+              <label class="full-width">
+                Notes
+                <textarea id="account-info-notes" placeholder="Proxy utilisé, historique, contexte..."></textarea>
+              </label>
+              <div class="entry-form-actions full-width">
+                <button type="submit" class="btn-primary">Enregistrer</button>
+                <button type="button" class="btn-secondary" id="account-info-cancel">Annuler</button>
+              </div>
+            </form>
+          </div>
+
           <nav class="tab-bar" id="tab-bar">
             <button type="button" class="tab-btn is-active" data-tab="dashboard">Dashboard</button>
             <button type="button" class="tab-btn" data-tab="insights">Insights</button>

@@ -439,6 +439,133 @@ body {
   text-overflow: ellipsis;
 }
 
+/* --- account info card --------------------------------------------------- */
+
+.info-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.info-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.btn-text {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-text:hover {
+  color: var(--accent-strong);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.info-item-full {
+  grid-column: 1 / -1;
+}
+
+.info-label {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-secondary);
+  margin-bottom: 4px;
+}
+
+.info-value {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 12px;
+}
+
+.status-actif {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success);
+}
+
+.status-pause {
+  background: rgba(107, 114, 128, 0.12);
+  color: var(--ink-secondary);
+}
+
+.status-shadowban {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-banni {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--danger);
+}
+
+.account-info-form[hidden] {
+  display: none;
+}
+
+.account-info-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.account-info-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.account-info-form input,
+.account-info-form select,
+.account-info-form textarea {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 9px 10px;
+}
+
+.account-info-form textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.account-info-form .full-width {
+  grid-column: 1 / -1;
+}
+
+.account-info-form .entry-form-actions {
+  margin-top: 0;
+}
+
 /* --- tab navigation ------------------------------------------------------ */
 
 .tab-bar {
