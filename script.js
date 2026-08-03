@@ -3,10 +3,18 @@ const STORAGE_ENTRIES = "signal_entries";
 const STORAGE_CONVERSIONS = "signal_conversions";
 const STORAGE_TAG_VOCAB = "signal_tag_vocab";
 
-// one color per channel — reused consistently across chips, pulse traces and charts
-const CHANNEL_COLORS = ["#e8a94a", "#e2735a", "#d97bc4", "#7fbd8a", "#7c93e0", "#4fc2b0"];
+// one color per channel — reused consistently across chips, pulse traces and charts.
+// fixed CVD-safe order (never cycled/reassigned) — see dataviz skill's validated palette.
+const CHANNEL_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
 
 const CATEGORY_LABELS = { trafic: "Trafic", creatrice: "Créatrice" };
+
+const TAB_TITLES = { dashboard: "Dashboard", insights: "Insights", conversion: "Conversion", journal: "Journal" };
+
+// Chart.js chrome shared across every chart (light surface tokens)
+const CHART_INK = "#6b7280";
+const CHART_GRID = "#e5e7eb";
+const CHART_LEGEND = "#111827";
 
 // structured content taxonomy — predefined lists stay hardcoded so future default
 // changes aren't shadowed by stale localStorage; users can extend via signal_tag_vocab
@@ -111,7 +119,8 @@ let tagVocab = loadTagVocab();
 
 let trendChart = null;
 let insightsCharts = {}; // { hook: Chart, format: Chart, ... }
-let conversionChart = null;
+let conversionViewsChart = null;
+let conversionMetricsChart = null;
 
 // shared filter driving account chips, Pouls, stat bar and Insights
 let globalCategoryFilter = "all";
@@ -255,10 +264,12 @@ function setupSegmented(containerId, onSelect) {
 // --- tabs -----------------------------------------------------------------
 
 function renderActiveTab() {
+  document.getElementById("page-title").textContent = TAB_TITLES[activeTab] || "Dashboard";
   if (activeTab === "dashboard") renderTrendChart();
   if (activeTab === "insights") renderInsights();
   if (activeTab === "conversion") {
-    renderConversionChart();
+    renderConversionViewsChart();
+    renderConversionMetricsChart();
     renderConversionLogTable();
   }
   if (activeTab === "journal") renderLogTable();
@@ -337,7 +348,7 @@ function renderAccountChips() {
 
   if (accounts.length === 0) {
     const p = document.createElement("span");
-    p.className = "signal-empty";
+    p.className = "empty-hint";
     p.textContent = "Aucun canal actif. Ajoute un compte ci-dessous.";
     wrap.appendChild(p);
     return;
@@ -346,7 +357,7 @@ function renderAccountChips() {
   const visible = accountsInScope();
   if (visible.length === 0) {
     const p = document.createElement("span");
-    p.className = "signal-empty";
+    p.className = "empty-hint";
     p.textContent = "Aucun compte dans ce filtre.";
     wrap.appendChild(p);
     return;
@@ -476,15 +487,15 @@ function wireTagAddButtons() {
 function updateConsoleReadout() {
   const el = document.getElementById("console-readout");
   if (accounts.length === 0) {
-    el.textContent = "AUCUN CANAL — ajoute un compte pour démarrer le suivi";
+    el.textContent = "Aucun compte — ajoute-en un pour démarrer le suivi";
     return;
   }
-  const chanLabel = accounts.length > 1 ? "CANAUX ACTIFS" : "CANAL ACTIF";
-  const entryLabelText = entries.length > 1 ? "ENTRÉES" : "ENTRÉE";
-  let lastLabel = "AUCUN SIGNAL";
+  const chanLabel = accounts.length > 1 ? "comptes actifs" : "compte actif";
+  const entryLabelText = entries.length > 1 ? "entrées" : "entrée";
+  let lastLabel = "aucun signal";
   if (entries.length > 0) {
     const lastDate = entries.map((e) => e.date).sort().slice(-1)[0];
-    lastLabel = "DERNIER SIGNAL " + lastDate;
+    lastLabel = "dernière entrée le " + lastDate;
   }
   el.textContent = `${accounts.length} ${chanLabel} · ${entries.length} ${entryLabelText} · ${lastLabel}`;
 }
@@ -549,13 +560,13 @@ function renderSignalStrip() {
   wrap.innerHTML = "";
 
   if (accounts.length === 0) {
-    wrap.innerHTML = '<p class="signal-empty">Ajoute un compte pour voir son activité ici.</p>';
+    wrap.innerHTML = '<p class="empty-hint">Ajoute un compte pour voir son activité ici.</p>';
     return;
   }
 
   const visible = accountsInScope();
   if (visible.length === 0) {
-    wrap.innerHTML = '<p class="signal-empty">Aucun compte dans ce filtre.</p>';
+    wrap.innerHTML = '<p class="empty-hint">Aucun compte dans ce filtre.</p>';
     return;
   }
 
@@ -636,8 +647,9 @@ function renderTrendChart() {
         data: uniqueDates.map((d) => (byDate[d] !== undefined ? byDate[d] : null)),
         borderColor: color,
         backgroundColor: color,
+        borderWidth: 2,
         tension: 0.3,
-        pointRadius: 3,
+        pointRadius: 4,
         spanGaps: true,
       };
     });
@@ -655,8 +667,9 @@ function renderTrendChart() {
         data: uniqueDates.map((d) => byDate[d]),
         borderColor: color,
         backgroundColor: color,
+        borderWidth: 2,
         tension: 0.3,
-        pointRadius: 3,
+        pointRadius: 4,
       },
     ];
   }
@@ -671,12 +684,12 @@ function renderTrendChart() {
       plugins: {
         legend: {
           display: filter === "all",
-          labels: { color: "#f2ebdd", boxWidth: 10, font: { size: 11 } },
+          labels: { color: CHART_LEGEND, boxWidth: 10, font: { size: 11 } },
         },
       },
       scales: {
-        x: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
-        y: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
       },
     },
   });
@@ -784,8 +797,8 @@ function renderInsightsAxisChart(axis, filteredEntries) {
         },
       },
       scales: {
-        x: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
-        y: { ticks: { color: "#f2ebdd", font: { size: 10 } }, grid: { display: false } },
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_LEGEND, font: { size: 10 } }, grid: { display: false } },
       },
     },
   });
@@ -870,56 +883,96 @@ function computeDailyConversions(scope) {
   return byDate;
 }
 
-function renderConversionChart() {
+// two small multiples instead of one dual-axis chart: views and conversion counts
+// live on very different scales, and a shared y-axis would misrepresent one of them.
+function renderConversionViewsChart() {
   const filter = document.getElementById("conversion-account-filter").value;
-  const canvas = document.getElementById("conversion-chart");
-  const emptyMsg = document.getElementById("conversion-chart-empty");
+  const canvas = document.getElementById("conversion-views-chart");
+  const emptyMsg = document.getElementById("conversion-views-empty");
 
   const viewsByDate = computeDailyContentViews(filter);
-  const convByDate = computeDailyConversions(filter);
-  const allDates = [...new Set([...Object.keys(viewsByDate), ...Object.keys(convByDate)])].sort();
+  const dates = Object.keys(viewsByDate).sort();
 
-  if (allDates.length === 0) {
+  if (dates.length === 0) {
     emptyMsg.style.display = "block";
     canvas.style.display = "none";
-    if (conversionChart) {
-      conversionChart.destroy();
-      conversionChart = null;
+    if (conversionViewsChart) {
+      conversionViewsChart.destroy();
+      conversionViewsChart = null;
     }
     return;
   }
   emptyMsg.style.display = "none";
   canvas.style.display = "block";
 
-  if (conversionChart) conversionChart.destroy();
-  conversionChart = new Chart(canvas, {
+  if (conversionViewsChart) conversionViewsChart.destroy();
+  conversionViewsChart = new Chart(canvas, {
+    type: "line",
     data: {
-      labels: allDates,
+      labels: dates,
       datasets: [
         {
-          type: "line",
-          label: "Vues (contenu)",
-          data: allDates.map((d) => (viewsByDate[d] !== undefined ? viewsByDate[d] : null)),
-          borderColor: "#e8a94a",
-          backgroundColor: "#e8a94a",
-          yAxisID: "y",
+          label: "Vues",
+          data: dates.map((d) => viewsByDate[d]),
+          borderColor: CHANNEL_COLORS[0],
+          backgroundColor: CHANNEL_COLORS[0],
+          borderWidth: 2,
           tension: 0.3,
-          spanGaps: true,
-          pointRadius: 3,
+          pointRadius: 4,
         },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+      },
+    },
+  });
+}
+
+function renderConversionMetricsChart() {
+  const filter = document.getElementById("conversion-account-filter").value;
+  const canvas = document.getElementById("conversion-metrics-chart");
+  const emptyMsg = document.getElementById("conversion-metrics-empty");
+
+  const convByDate = computeDailyConversions(filter);
+  const dates = Object.keys(convByDate).sort();
+
+  if (dates.length === 0) {
+    emptyMsg.style.display = "block";
+    canvas.style.display = "none";
+    if (conversionMetricsChart) {
+      conversionMetricsChart.destroy();
+      conversionMetricsChart = null;
+    }
+    return;
+  }
+  emptyMsg.style.display = "none";
+  canvas.style.display = "block";
+
+  if (conversionMetricsChart) conversionMetricsChart.destroy();
+  conversionMetricsChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: dates,
+      datasets: [
         {
-          type: "bar",
           label: "Nouveaux abonnés",
-          data: allDates.map((d) => (convByDate[d] ? convByDate[d].newSubs : 0)),
-          backgroundColor: "#7fbd8a",
-          yAxisID: "y1",
+          data: dates.map((d) => convByDate[d].newSubs),
+          backgroundColor: CHANNEL_COLORS[2],
+          borderRadius: 4,
+          maxBarThickness: 20,
         },
         {
-          type: "bar",
           label: "Clics lien bio",
-          data: allDates.map((d) => (convByDate[d] ? convByDate[d].linkClicks : 0)),
-          backgroundColor: "#7c93e0",
-          yAxisID: "y1",
+          data: dates.map((d) => convByDate[d].linkClicks),
+          backgroundColor: CHANNEL_COLORS[6],
+          borderRadius: 4,
+          maxBarThickness: 20,
         },
       ],
     },
@@ -927,17 +980,11 @@ function renderConversionChart() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: "#f2ebdd", boxWidth: 10, font: { size: 11 } } },
+        legend: { labels: { color: CHART_LEGEND, boxWidth: 10, font: { size: 11 } } },
       },
       scales: {
-        x: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
-        y: {
-          position: "left",
-          ticks: { color: "#a99a85" },
-          grid: { color: "#2a2119" },
-          title: { display: true, text: "Vues", color: "#a99a85" },
-        },
-        y1: { position: "right", ticks: { color: "#a99a85" }, grid: { display: false } },
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
       },
     },
   });
@@ -1031,7 +1078,8 @@ document.getElementById("insights-leaderboard-sort").addEventListener("change", 
 });
 
 document.getElementById("conversion-account-filter").addEventListener("change", () => {
-  renderConversionChart();
+  renderConversionViewsChart();
+  renderConversionMetricsChart();
   renderConversionLogTable();
 });
 

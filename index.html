@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Syne:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -16,11 +16,8 @@
     <div class="app">
       <aside class="rail">
         <div class="brand">
-          <div>
-            <h1>Venatus Pulse</h1>
-            <p class="brand-sub">Trafic &amp; créatrices — suivi de contenu</p>
-          </div>
-          <span class="rec-badge"><span class="rec-dot"></span>LIVE</span>
+          <span class="brand-mark">V</span>
+          <span class="brand-name">Venatus Pulse</span>
         </div>
 
         <section class="rail-section">
@@ -43,7 +40,7 @@
               <button type="button" class="segmented-option is-active" data-category="trafic">Trafic</button>
               <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
             </div>
-            <input type="text" id="new-account-niche" list="niche-suggestions" placeholder="niche / modèle (optionnel)" />
+            <input type="text" id="new-account-niche" list="niche-suggestions" placeholder="Niche / modèle (optionnel)" />
             <datalist id="niche-suggestions"></datalist>
             <div class="add-row">
               <input type="text" id="new-account-input" placeholder="nom_du_compte" />
@@ -65,7 +62,7 @@
             </label>
             <label>
               Label / concept (optionnel)
-              <input type="text" id="entry-label" placeholder="ex : hook question sur les ruptures" />
+              <input type="text" id="entry-label" placeholder="Ex : hook question sur les ruptures" />
             </label>
 
             <div class="tag-picker-grid" id="entry-tags">
@@ -126,7 +123,7 @@
             </div>
             <label>
               Notes
-              <textarea id="entry-notes" placeholder="ce qui a marché ou pas, contexte..."></textarea>
+              <textarea id="entry-notes" placeholder="Ce qui a marché ou pas, contexte..."></textarea>
             </label>
             <button type="submit" class="btn-primary">Enregistrer l'entrée</button>
           </form>
@@ -134,9 +131,9 @@
       </aside>
 
       <main class="canvas">
-        <div class="console-line">
-          <span class="rec-dot"></span>
-          <span id="console-readout">chargement…</span>
+        <div class="page-header">
+          <h1 id="page-title">Dashboard</h1>
+          <p class="page-subtitle" id="console-readout">chargement…</p>
         </div>
 
         <div class="stat-bar" id="stat-bar">
@@ -167,13 +164,13 @@
 
         <section class="tab-panel" id="tab-dashboard" data-tab-panel="dashboard">
           <div class="dashboard-pulse">
-            <h2>Pouls des comptes</h2>
+            <h2 class="section-title">Pouls des comptes</h2>
             <div id="signal-strip" class="signal-strip"></div>
           </div>
 
           <div class="chart-card">
             <div class="chart-card-head">
-              <h2>Tendance dans le temps</h2>
+              <h2 class="section-title">Tendance dans le temps</h2>
               <select id="trend-account-filter"></select>
             </div>
             <div class="chart-wrap chart-wrap-line">
@@ -184,47 +181,47 @@
 
         <section class="tab-panel" id="tab-insights" data-tab-panel="insights" hidden>
           <div class="insights-head">
-            <h2>Insights — quoi dupliquer</h2>
+            <h2 class="section-title">Insights — quoi dupliquer</h2>
             <div class="segmented" id="insights-metric-toggle">
               <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
               <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
             </div>
           </div>
 
-          <p id="insights-empty" class="signal-empty" style="display: none">Pas encore assez de données pour ce filtre.</p>
+          <p id="insights-empty" class="empty-hint" style="display: none">Pas encore assez de données pour ce filtre.</p>
 
           <div class="insights-grid" id="insights-grid">
             <div class="chart-card chart-card-mini">
-              <h2>Hook</h2>
+              <h2 class="section-title section-title-sm">Hook</h2>
               <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-hook"></canvas></div>
             </div>
             <div class="chart-card chart-card-mini">
-              <h2>Format</h2>
+              <h2 class="section-title section-title-sm">Format</h2>
               <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-format"></canvas></div>
             </div>
             <div class="chart-card chart-card-mini">
-              <h2>Longueur</h2>
+              <h2 class="section-title section-title-sm">Longueur</h2>
               <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-longueur"></canvas></div>
             </div>
             <div class="chart-card chart-card-mini">
-              <h2>CTA</h2>
+              <h2 class="section-title section-title-sm">CTA</h2>
               <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-cta"></canvas></div>
             </div>
             <div class="chart-card chart-card-mini">
-              <h2>Son</h2>
+              <h2 class="section-title section-title-sm">Son</h2>
               <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-son"></canvas></div>
             </div>
           </div>
 
-          <div class="log-section">
-            <div class="log-head">
-              <h2>Top contenus</h2>
+          <div class="table-card">
+            <div class="table-card-head">
+              <h2 class="section-title">Top contenus</h2>
               <select id="insights-leaderboard-sort">
                 <option value="views">Trier par vues</option>
                 <option value="engagement">Trier par engagement</option>
               </select>
             </div>
-            <div class="log-table-wrap">
+            <div class="table-wrap">
               <table id="insights-leaderboard-table">
                 <thead>
                   <tr>
@@ -239,13 +236,13 @@
                 </thead>
                 <tbody id="insights-leaderboard-body"></tbody>
               </table>
-              <p id="insights-leaderboard-empty" class="log-empty" style="display: none">Aucun contenu pour l'instant.</p>
+              <p id="insights-leaderboard-empty" class="empty-hint" style="display: none">Aucun contenu pour l'instant.</p>
             </div>
           </div>
         </section>
 
         <section class="tab-panel" id="tab-conversion" data-tab-panel="conversion" hidden>
-          <h2>Conversion — clics &amp; abonnés</h2>
+          <h2 class="section-title">Conversion — clics &amp; abonnés</h2>
           <form id="conversion-form" class="conversion-form">
             <label>
               Compte
@@ -270,42 +267,58 @@
             <button type="submit" class="btn-primary">Enregistrer</button>
           </form>
 
-          <div class="chart-card">
-            <div class="chart-card-head">
-              <h2>Contenu vs conversion</h2>
-              <select id="conversion-account-filter"></select>
+          <div class="chart-card-head standalone-head">
+            <span></span>
+            <select id="conversion-account-filter"></select>
+          </div>
+
+          <div class="conversion-charts">
+            <div class="chart-card">
+              <h2 class="section-title section-title-sm">Vues du contenu</h2>
+              <div class="chart-wrap chart-wrap-line">
+                <canvas id="conversion-views-chart"></canvas>
+                <p id="conversion-views-empty" class="empty-hint" style="display: none">Pas encore de contenu publié.</p>
+              </div>
             </div>
-            <div class="chart-wrap chart-wrap-dual">
-              <canvas id="conversion-chart"></canvas>
-              <p id="conversion-chart-empty" class="signal-empty" style="display: none">Pas encore de données de conversion.</p>
+            <div class="chart-card">
+              <h2 class="section-title section-title-sm">Clics &amp; nouveaux abonnés</h2>
+              <div class="chart-wrap chart-wrap-line">
+                <canvas id="conversion-metrics-chart"></canvas>
+                <p id="conversion-metrics-empty" class="empty-hint" style="display: none">Pas encore de données de conversion.</p>
+              </div>
             </div>
           </div>
 
-          <div class="log-table-wrap conversion-log-wrap">
-            <table id="conversion-log-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Compte</th>
-                  <th>Clics</th>
-                  <th>Abonnés</th>
-                  <th>Revenu</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="conversion-log-body"></tbody>
-            </table>
-            <p id="conversion-log-empty" class="log-empty" style="display: none">Aucune donnée de conversion pour l'instant.</p>
+          <div class="table-card">
+            <div class="table-card-head">
+              <h2 class="section-title">Journal de conversion</h2>
+            </div>
+            <div class="table-wrap">
+              <table id="conversion-log-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Compte</th>
+                    <th>Clics</th>
+                    <th>Abonnés</th>
+                    <th>Revenu</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="conversion-log-body"></tbody>
+              </table>
+              <p id="conversion-log-empty" class="empty-hint" style="display: none">Aucune donnée de conversion pour l'instant.</p>
+            </div>
           </div>
         </section>
 
         <section class="tab-panel" id="tab-journal" data-tab-panel="journal" hidden>
-          <div class="log-section">
-            <div class="log-head">
-              <h2>Journal complet</h2>
+          <div class="table-card">
+            <div class="table-card-head">
+              <h2 class="section-title">Journal complet</h2>
               <select id="log-account-filter"></select>
             </div>
-            <div class="log-table-wrap">
+            <div class="table-wrap">
               <table id="log-table">
                 <thead>
                   <tr>
@@ -322,7 +335,7 @@
                 </thead>
                 <tbody id="log-body"></tbody>
               </table>
-              <p id="log-empty" class="log-empty" style="display: none">Aucune entrée pour l'instant. Ajoute ta première publication à gauche.</p>
+              <p id="log-empty" class="empty-hint" style="display: none">Aucune entrée pour l'instant. Ajoute ta première publication à gauche.</p>
             </div>
           </div>
         </section>
