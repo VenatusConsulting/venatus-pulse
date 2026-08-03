@@ -180,6 +180,13 @@ body {
   margin-bottom: 12px;
 }
 
+.niche-filter-select {
+  width: 100%;
+  margin-bottom: 12px;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
 /* --- account chips + category badges ----------------------------------- */
 
 .account-chips {
@@ -467,10 +474,87 @@ body {
   margin-bottom: 18px;
 }
 
+/* --- stat bar (global KPIs) --------------------------------------------- */
+
+.stat-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-label {
+  font-family: var(--font-data);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sand);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1.1;
+}
+
+.stat-value-text {
+  font-size: 16px;
+  color: var(--cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- tab navigation ------------------------------------------------------ */
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--sand);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.tab-btn:hover {
+  color: var(--cream);
+}
+
+.tab-btn.is-active {
+  color: var(--cream);
+  border-bottom-color: var(--gold);
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
 /* --- signal strip (signature element: per-account pulse trace) --------- */
 
-.signal-strip-section {
-  margin-bottom: 34px;
+.dashboard-pulse {
+  margin-bottom: 24px;
 }
 
 .signal-strip {
@@ -591,18 +675,12 @@ body {
 
 /* --- charts ------------------------------------------------------------ */
 
-.chart-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  margin-bottom: 34px;
-}
-
 .chart-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 18px 20px;
+  margin-bottom: 24px;
 }
 
 .chart-card-head {
@@ -621,19 +699,11 @@ body {
   width: 100%;
 }
 
-.chart-wrap-bar {
-  height: 220px;
-}
-
 .chart-wrap-line {
   height: 220px;
 }
 
-/* --- insights section (structured tag breakdowns + leaderboard) -------- */
-
-.insights-section {
-  margin-bottom: 34px;
-}
+/* --- insights tab (structured tag breakdowns + leaderboard) ------------ */
 
 .insights-head {
   display: flex;
@@ -648,18 +718,15 @@ body {
   margin: 0;
 }
 
-.insights-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
 .insights-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
+}
+
+.chart-card-mini {
+  margin-bottom: 0;
 }
 
 .chart-card-mini h2 {
@@ -688,11 +755,7 @@ body {
   color: #b5895a;
 }
 
-/* --- conversion section (daily clicks / new subs vs content) ----------- */
-
-.conversion-section {
-  margin-bottom: 34px;
-}
+/* --- conversion tab (daily clicks / new subs vs content) --------------- */
 
 .conversion-form {
   display: flex;
@@ -852,14 +915,17 @@ td.peak-views {
     height: auto;
     width: auto;
   }
-  .chart-section {
-    grid-template-columns: 1fr;
-  }
   .insights-grid {
     grid-template-columns: 1fr;
   }
   .conversion-form {
     flex-direction: column;
     align-items: stretch;
+  }
+  .tab-bar {
+    overflow-x: auto;
+  }
+  .stat-bar {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

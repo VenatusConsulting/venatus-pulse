@@ -109,21 +109,23 @@ let entries = loadEntries();
 let conversions = loadConversions();
 let tagVocab = loadTagVocab();
 
-let variantChart = null;
 let trendChart = null;
 let insightsCharts = {}; // { hook: Chart, format: Chart, ... }
 let conversionChart = null;
 
-// which category is currently shown in the sidebar + Pouls des comptes
-let categoryFilter = "all";
+// shared filter driving account chips, Pouls, stat bar and Insights
+let globalCategoryFilter = "all";
+let globalNicheFilter = "all";
+
 // which category will be assigned to the next account created
 let newAccountCategory = "trafic";
 
-// Insights section state
-let insightsCategoryFilter = "all";
-let insightsNicheFilter = "all";
+// Insights tab state
 let insightsMetric = "views"; // "views" | "engagement"
 let insightsSort = "views"; // "views" | "engagement"
+
+// active main-canvas tab
+let activeTab = "dashboard";
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -139,8 +141,15 @@ function channelColor(accountId) {
   return CHANNEL_COLORS[(idx < 0 ? 0 : idx) % CHANNEL_COLORS.length];
 }
 
-function accountsInCategory(category) {
-  return category === "all" ? accounts : accounts.filter((a) => a.category === category);
+function accountsInScope() {
+  return accounts
+    .filter((a) => globalCategoryFilter === "all" || a.category === globalCategoryFilter)
+    .filter((a) => globalNicheFilter === "all" || a.niche === globalNicheFilter);
+}
+
+function entriesInScope() {
+  const scopedIds = new Set(accountsInScope().map((a) => a.id));
+  return entries.filter((e) => scopedIds.has(e.accountId));
 }
 
 function escapeHtml(str) {
@@ -243,6 +252,83 @@ function setupSegmented(containerId, onSelect) {
   });
 }
 
+// --- tabs -----------------------------------------------------------------
+
+function renderActiveTab() {
+  if (activeTab === "dashboard") renderTrendChart();
+  if (activeTab === "insights") renderInsights();
+  if (activeTab === "conversion") {
+    renderConversionChart();
+    renderConversionLogTable();
+  }
+  if (activeTab === "journal") renderLogTable();
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.tab === tab);
+  });
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== tab;
+  });
+  // re-render now that the panel is visible, so Chart.js sizes against real dimensions
+  renderActiveTab();
+}
+
+// --- global stat bar -------------------------------------------------------
+
+function computeGlobalStats() {
+  const filtered = entriesInScope();
+  const totalViews = filtered.reduce((sum, e) => sum + Number(e.views || 0), 0);
+  const avgEngagement = filtered.length ? filtered.reduce((sum, e) => sum + engagementRate(e), 0) / filtered.length : 0;
+
+  const nicheGroups = {};
+  const accountGroups = {};
+  filtered.forEach((e) => {
+    const acc = accounts.find((a) => a.id === e.accountId);
+    const views = Number(e.views || 0);
+    if (acc && acc.niche) {
+      if (!nicheGroups[acc.niche]) nicheGroups[acc.niche] = { total: 0, count: 0 };
+      nicheGroups[acc.niche].total += views;
+      nicheGroups[acc.niche].count += 1;
+    }
+    if (!accountGroups[e.accountId]) accountGroups[e.accountId] = { total: 0, count: 0 };
+    accountGroups[e.accountId].total += views;
+    accountGroups[e.accountId].count += 1;
+  });
+
+  let bestNiche = "—";
+  let bestNicheAvg = -1;
+  Object.entries(nicheGroups).forEach(([niche, g]) => {
+    const avg = g.total / g.count;
+    if (avg > bestNicheAvg) {
+      bestNicheAvg = avg;
+      bestNiche = niche;
+    }
+  });
+
+  let bestAccountName = "—";
+  let bestAccountAvg = -1;
+  Object.entries(accountGroups).forEach(([accId, g]) => {
+    const avg = g.total / g.count;
+    if (avg > bestAccountAvg) {
+      bestAccountAvg = avg;
+      bestAccountName = accountName(accId);
+    }
+  });
+
+  return { totalViews, avgEngagement, bestNiche, bestAccountName };
+}
+
+function renderStatBar() {
+  const stats = computeGlobalStats();
+  document.getElementById("stat-total-views").textContent = formatCompact(stats.totalViews);
+  document.getElementById("stat-avg-engagement").textContent = formatPercent(stats.avgEngagement);
+  document.getElementById("stat-best-niche").textContent = stats.bestNiche;
+  document.getElementById("stat-best-account").textContent = stats.bestAccountName;
+}
+
 // --- account management ----------------------------------------------
 
 function renderAccountChips() {
@@ -257,11 +343,11 @@ function renderAccountChips() {
     return;
   }
 
-  const visible = accountsInCategory(categoryFilter);
+  const visible = accountsInScope();
   if (visible.length === 0) {
     const p = document.createElement("span");
     p.className = "signal-empty";
-    p.textContent = "Aucun compte dans cette catégorie.";
+    p.textContent = "Aucun compte dans ce filtre.";
     wrap.appendChild(p);
     return;
   }
@@ -299,26 +385,26 @@ function renderAccountChips() {
 
 function populateAccountSelects() {
   const entrySelect = document.getElementById("entry-account");
-  const chartFilter = document.getElementById("chart-account-filter");
+  const trendFilter = document.getElementById("trend-account-filter");
   const logFilter = document.getElementById("log-account-filter");
   const conversionFormAccount = document.getElementById("conversion-form-account");
   const conversionFilter = document.getElementById("conversion-account-filter");
 
   const prevEntry = entrySelect.value;
-  const prevChart = chartFilter.value;
+  const prevTrend = trendFilter.value;
   const prevLog = logFilter.value;
   const prevConversionForm = conversionFormAccount.value;
   const prevConversionFilter = conversionFilter.value;
 
   entrySelect.innerHTML = "";
-  chartFilter.innerHTML = '<option value="all">Tous les comptes</option>';
+  trendFilter.innerHTML = '<option value="all">Tous les comptes</option>';
   logFilter.innerHTML = '<option value="all">Tous les comptes</option>';
   conversionFormAccount.innerHTML = "";
   conversionFilter.innerHTML = '<option value="all">Tous les comptes</option>';
 
-  // these selectors always list every account, regardless of the sidebar/Pouls category filter
+  // these selectors always list every account, regardless of the sidebar/global filter
   accounts.forEach((acc) => {
-    [entrySelect, chartFilter, logFilter, conversionFormAccount, conversionFilter].forEach((select) => {
+    [entrySelect, trendFilter, logFilter, conversionFormAccount, conversionFilter].forEach((select) => {
       const opt = document.createElement("option");
       opt.value = acc.id;
       opt.textContent = acc.name;
@@ -327,7 +413,7 @@ function populateAccountSelects() {
   });
 
   if ([...entrySelect.options].some((o) => o.value === prevEntry)) entrySelect.value = prevEntry;
-  if ([...chartFilter.options].some((o) => o.value === prevChart)) chartFilter.value = prevChart;
+  if ([...trendFilter.options].some((o) => o.value === prevTrend)) trendFilter.value = prevTrend;
   if ([...logFilter.options].some((o) => o.value === prevLog)) logFilter.value = prevLog;
   if ([...conversionFormAccount.options].some((o) => o.value === prevConversionForm)) conversionFormAccount.value = prevConversionForm;
   if ([...conversionFilter.options].some((o) => o.value === prevConversionFilter)) conversionFilter.value = prevConversionFilter;
@@ -350,7 +436,7 @@ function populateTagSelects() {
 }
 
 function populateNicheFilter() {
-  const select = document.getElementById("insights-niche-filter");
+  const select = document.getElementById("global-niche-filter");
   const datalist = document.getElementById("niche-suggestions");
   const prev = select.value;
   select.innerHTML = '<option value="all">Toutes les niches</option>';
@@ -366,7 +452,7 @@ function populateNicheFilter() {
     datalist.appendChild(dOpt);
   });
   if ([...select.options].some((o) => o.value === prev)) select.value = prev;
-  else insightsNicheFilter = select.value;
+  else globalNicheFilter = select.value;
 }
 
 function wireTagAddButtons() {
@@ -467,9 +553,9 @@ function renderSignalStrip() {
     return;
   }
 
-  const visible = accountsInCategory(categoryFilter);
+  const visible = accountsInScope();
   if (visible.length === 0) {
-    wrap.innerHTML = '<p class="signal-empty">Aucun compte dans cette catégorie.</p>';
+    wrap.innerHTML = '<p class="signal-empty">Aucun compte dans ce filtre.</p>';
     return;
   }
 
@@ -526,49 +612,10 @@ function renderSignalStrip() {
   });
 }
 
-// --- charts ------------------------------------------------------------
-
-function renderVariantChart() {
-  const filter = document.getElementById("chart-account-filter").value;
-  const canvas = document.getElementById("variant-chart");
-
-  let filtered = filter === "all" ? entries.slice() : entries.filter((e) => e.accountId === filter);
-  filtered = filtered.sort((a, b) => Number(b.views || 0) - Number(a.views || 0)).slice(0, 8);
-
-  const labels = filtered.map((e) => (filter === "all" ? `${entryLabel(e)} (${accountName(e.accountId)})` : entryLabel(e)));
-  const data = filtered.map((e) => Number(e.views || 0));
-  const colors = filtered.map((e) => channelColor(e.accountId));
-
-  if (variantChart) variantChart.destroy();
-  variantChart = new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Vues",
-          data,
-          backgroundColor: colors,
-          borderRadius: 4,
-          maxBarThickness: 22,
-        },
-      ],
-    },
-    options: {
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
-        y: { ticks: { color: "#f2ebdd", font: { size: 11 } }, grid: { display: false } },
-      },
-    },
-  });
-}
+// --- dashboard trend chart -----------------------------------------------
 
 function renderTrendChart() {
-  const filter = document.getElementById("chart-account-filter").value;
+  const filter = document.getElementById("trend-account-filter").value;
   const canvas = document.getElementById("trend-chart");
 
   const relevantEntries = filter === "all" ? entries : entries.filter((e) => e.accountId === filter);
@@ -689,16 +736,6 @@ function renderLogTable() {
 
 // --- insights (structured tags -> what works) ---------------------------
 
-function filterEntriesForInsights() {
-  const accIds = new Set(
-    accounts
-      .filter((a) => insightsCategoryFilter === "all" || a.category === insightsCategoryFilter)
-      .filter((a) => insightsNicheFilter === "all" || a.niche === insightsNicheFilter)
-      .map((a) => a.id)
-  );
-  return entries.filter((e) => accIds.has(e.accountId));
-}
-
 function computeAxisBreakdown(axis, filteredEntries) {
   const groups = {};
   filteredEntries.forEach((e) => {
@@ -788,8 +825,7 @@ function renderInsightsLeaderboard(filteredEntries) {
 }
 
 function renderInsights() {
-  populateNicheFilter();
-  const filtered = filterEntriesForInsights();
+  const filtered = entriesInScope();
   const emptyMsg = document.getElementById("insights-empty");
   const grid = document.getElementById("insights-grid");
 
@@ -953,38 +989,39 @@ function renderAll() {
   populateTagSelects();
   renderAccountChips();
   populateAccountSelects();
+  populateNicheFilter();
   updateConsoleReadout();
+  renderStatBar();
   renderSignalStrip();
-  renderVariantChart();
-  renderTrendChart();
-  renderLogTable();
-  renderInsights();
-  renderConversionChart();
-  renderConversionLogTable();
+  renderActiveTab();
 }
 
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
 setupSegmented("category-filter", (value) => {
-  categoryFilter = value;
+  globalCategoryFilter = value;
   renderAccountChips();
+  renderStatBar();
   renderSignalStrip();
+  renderActiveTab();
+});
+
+document.getElementById("global-niche-filter").addEventListener("change", (e) => {
+  globalNicheFilter = e.target.value;
+  renderAccountChips();
+  renderStatBar();
+  renderSignalStrip();
+  renderActiveTab();
 });
 
 setupSegmented("new-account-category", (value) => {
   newAccountCategory = value;
 });
 
-setupSegmented("insights-category-filter", (value) => {
-  insightsCategoryFilter = value;
-  renderInsights();
-});
-
 setupSegmented("insights-metric-toggle", (value) => {
   insightsMetric = value;
-  renderInsights();
-});
-
-document.getElementById("insights-niche-filter").addEventListener("change", (e) => {
-  insightsNicheFilter = e.target.value;
   renderInsights();
 });
 
@@ -1065,10 +1102,7 @@ document.getElementById("conversion-form").addEventListener("submit", (e) => {
   renderAll();
 });
 
-document.getElementById("chart-account-filter").addEventListener("change", () => {
-  renderVariantChart();
-  renderTrendChart();
-});
+document.getElementById("trend-account-filter").addEventListener("change", renderTrendChart);
 document.getElementById("log-account-filter").addEventListener("change", renderLogTable);
 
 wireTagAddButtons();

@@ -32,6 +32,10 @@
             <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
           </div>
 
+          <select id="global-niche-filter" class="niche-filter-select">
+            <option value="all">Toutes les niches</option>
+          </select>
+
           <div id="account-chips" class="account-chips"></div>
 
           <div class="add-account-block">
@@ -130,31 +134,60 @@
       </aside>
 
       <main class="canvas">
-        <section class="signal-strip-section">
-          <div class="console-line">
-            <span class="rec-dot"></span>
-            <span id="console-readout">chargement…</span>
+        <div class="console-line">
+          <span class="rec-dot"></span>
+          <span id="console-readout">chargement…</span>
+        </div>
+
+        <div class="stat-bar" id="stat-bar">
+          <div class="stat-card">
+            <span class="stat-label">Vues totales</span>
+            <span class="stat-value" id="stat-total-views">0</span>
           </div>
-          <h2>Pouls des comptes</h2>
-          <div id="signal-strip" class="signal-strip"></div>
+          <div class="stat-card">
+            <span class="stat-label">Engagement moyen</span>
+            <span class="stat-value" id="stat-avg-engagement">0%</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Meilleure niche</span>
+            <span class="stat-value stat-value-text" id="stat-best-niche">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Meilleur compte</span>
+            <span class="stat-value stat-value-text" id="stat-best-account">—</span>
+          </div>
+        </div>
+
+        <nav class="tab-bar" id="tab-bar">
+          <button type="button" class="tab-btn is-active" data-tab="dashboard">Dashboard</button>
+          <button type="button" class="tab-btn" data-tab="insights">Insights</button>
+          <button type="button" class="tab-btn" data-tab="conversion">Conversion</button>
+          <button type="button" class="tab-btn" data-tab="journal">Journal</button>
+        </nav>
+
+        <section class="tab-panel" id="tab-dashboard" data-tab-panel="dashboard">
+          <div class="dashboard-pulse">
+            <h2>Pouls des comptes</h2>
+            <div id="signal-strip" class="signal-strip"></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-head">
+              <h2>Tendance dans le temps</h2>
+              <select id="trend-account-filter"></select>
+            </div>
+            <div class="chart-wrap chart-wrap-line">
+              <canvas id="trend-chart"></canvas>
+            </div>
+          </div>
         </section>
 
-        <section class="insights-section" id="insights-section">
+        <section class="tab-panel" id="tab-insights" data-tab-panel="insights" hidden>
           <div class="insights-head">
             <h2>Insights — quoi dupliquer</h2>
-            <div class="insights-filters">
-              <div class="segmented" id="insights-category-filter">
-                <button type="button" class="segmented-option is-active" data-category="all">Tous</button>
-                <button type="button" class="segmented-option" data-category="trafic">Trafic</button>
-                <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
-              </div>
-              <select id="insights-niche-filter">
-                <option value="all">Toutes les niches</option>
-              </select>
-              <div class="segmented" id="insights-metric-toggle">
-                <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
-                <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
-              </div>
+            <div class="segmented" id="insights-metric-toggle">
+              <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
+              <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
             </div>
           </div>
 
@@ -211,7 +244,7 @@
           </div>
         </section>
 
-        <section class="conversion-section" id="conversion-section">
+        <section class="tab-panel" id="tab-conversion" data-tab-panel="conversion" hidden>
           <h2>Conversion — clics &amp; abonnés</h2>
           <form id="conversion-form" class="conversion-form">
             <label>
@@ -266,47 +299,31 @@
           </div>
         </section>
 
-        <section class="chart-section">
-          <div class="chart-card">
-            <div class="chart-card-head">
-              <h2>Variantes les plus vues</h2>
-              <select id="chart-account-filter"></select>
+        <section class="tab-panel" id="tab-journal" data-tab-panel="journal" hidden>
+          <div class="log-section">
+            <div class="log-head">
+              <h2>Journal complet</h2>
+              <select id="log-account-filter"></select>
             </div>
-            <div class="chart-wrap chart-wrap-bar">
-              <canvas id="variant-chart"></canvas>
+            <div class="log-table-wrap">
+              <table id="log-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Compte</th>
+                    <th>Contenu</th>
+                    <th>Vues</th>
+                    <th>Likes</th>
+                    <th>Comm.</th>
+                    <th>Partages</th>
+                    <th>Notes</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="log-body"></tbody>
+              </table>
+              <p id="log-empty" class="log-empty" style="display: none">Aucune entrée pour l'instant. Ajoute ta première publication à gauche.</p>
             </div>
-          </div>
-          <div class="chart-card">
-            <h2>Tendance dans le temps</h2>
-            <div class="chart-wrap chart-wrap-line">
-              <canvas id="trend-chart"></canvas>
-            </div>
-          </div>
-        </section>
-
-        <section class="log-section">
-          <div class="log-head">
-            <h2>Journal complet</h2>
-            <select id="log-account-filter"></select>
-          </div>
-          <div class="log-table-wrap">
-            <table id="log-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Compte</th>
-                  <th>Contenu</th>
-                  <th>Vues</th>
-                  <th>Likes</th>
-                  <th>Comm.</th>
-                  <th>Partages</th>
-                  <th>Notes</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="log-body"></tbody>
-            </table>
-            <p id="log-empty" class="log-empty" style="display: none">Aucune entrée pour l'instant. Ajoute ta première publication à gauche.</p>
           </div>
         </section>
       </main>
