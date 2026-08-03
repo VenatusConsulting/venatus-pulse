@@ -8,8 +8,6 @@ const STORAGE_MODELS = "signal_models";
 // fixed CVD-safe order (never cycled/reassigned) — see dataviz skill's validated palette.
 const CHANNEL_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
 
-const CATEGORY_LABELS = { trafic: "Trafic", creatrice: "Créatrice" };
-
 // Chart.js chrome shared across every chart (light surface tokens)
 const CHART_INK = "#6b7280";
 const CHART_GRID = "#e5e7eb";
@@ -33,11 +31,10 @@ const PREDEFINED_TAGS = {
 function loadAccounts() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_ACCOUNTS)) || [];
-    // normalize: any account missing (or with an invalid) category defaults to "trafic",
-    // and niche defaults to "" — so pre-existing data keeps working without loss.
+    // normalize: niche defaults to "" — so pre-existing data keeps working without loss.
+    // (category is a leftover field on older records; no longer read anywhere)
     return raw.map((a) => ({
       ...a,
-      category: a.category === "creatrice" ? "creatrice" : "trafic",
       niche: typeof a.niche === "string" ? a.niche : "",
     }));
   } catch {
@@ -138,9 +135,6 @@ let conversionMetricsChart = null;
 let currentView = "models"; // "models" | "model" | "account"
 let currentNiche = null;
 let currentAccountId = null;
-
-// which category will be assigned to the next account created
-let newAccountCategory = "trafic";
 
 // Insights tab state
 let insightsMetric = "views"; // "views" | "engagement"
@@ -474,9 +468,6 @@ function renderModelAccountCards(niche) {
     const name = document.createElement("span");
     name.className = "signal-row-name";
     name.textContent = acc.name;
-    const badge = document.createElement("span");
-    badge.className = `cat-badge cat-${acc.category}`;
-    badge.textContent = CATEGORY_LABELS[acc.category];
     const stat = document.createElement("span");
     stat.className = "signal-row-stat";
     if (accEntries.length > 0) {
@@ -490,7 +481,7 @@ function renderModelAccountCards(niche) {
     del.className = "row-delete account-card-delete";
     del.textContent = "✕";
     del.title = "Supprimer ce compte";
-    head.append(dot, name, badge, stat, del);
+    head.append(dot, name, stat, del);
     card.appendChild(head);
 
     const canvasWrap = document.createElement("div");
@@ -539,9 +530,7 @@ function renderAccountView() {
   }
 
   document.getElementById("scoped-title").textContent = acc.name;
-  document.getElementById("scoped-subtitle").innerHTML = `<span class="cat-badge cat-${acc.category}">${escapeHtml(
-    CATEGORY_LABELS[acc.category]
-  )}</span>`;
+  document.getElementById("scoped-subtitle").textContent = "";
   const breadcrumb = document.getElementById("breadcrumb-btn");
   const displayNiche = acc.niche || "Sans modèle";
   breadcrumb.textContent = `← ${displayNiche}`;
@@ -1081,10 +1070,6 @@ document.getElementById("model-accounts").addEventListener("keydown", (e) => {
   goToAccount(card.dataset.accountId);
 });
 
-setupSegmented("new-account-category", (value) => {
-  newAccountCategory = value;
-});
-
 setupSegmented("insights-metric-toggle", (value) => {
   insightsMetric = value;
   renderInsights();
@@ -1103,7 +1088,7 @@ document.getElementById("add-account-btn").addEventListener("click", () => {
   const input = document.getElementById("new-account-input");
   const name = input.value.trim();
   if (!name) return;
-  accounts.push({ id: uid(), name, category: newAccountCategory, niche: currentNiche || "" });
+  accounts.push({ id: uid(), name, niche: currentNiche || "" });
   saveAccounts(accounts);
   input.value = "";
   renderCurrentView();

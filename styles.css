@@ -156,34 +156,6 @@ body {
   font-weight: 600;
 }
 
-/* --- category badges ---------------------------------------------------- */
-
-.chip-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.cat-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 20px;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-
-.cat-badge.cat-trafic {
-  color: var(--ink-secondary);
-  background: rgba(107, 114, 128, 0.12);
-}
-
-.cat-badge.cat-creatrice {
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-
 .empty-hint {
   font-size: 12px;
   color: var(--ink-muted);
