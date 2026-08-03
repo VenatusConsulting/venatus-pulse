@@ -2,13 +2,18 @@ const STORAGE_ACCOUNTS = "signal_accounts";
 const STORAGE_ENTRIES = "signal_entries";
 
 // one color per channel — reused consistently across chips, pulse traces and charts
-const CHANNEL_COLORS = ["#4ef2a0", "#48d7e8", "#e85fd0", "#f0b545", "#7c9cf0", "#f2685a"];
+const CHANNEL_COLORS = ["#e8a94a", "#e2735a", "#d97bc4", "#7fbd8a", "#7c93e0", "#4fc2b0"];
+
+const CATEGORY_LABELS = { trafic: "Trafic", creatrice: "Créatrice" };
 
 // --- storage --------------------------------------------------------
 
 function loadAccounts() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_ACCOUNTS)) || [];
+    const raw = JSON.parse(localStorage.getItem(STORAGE_ACCOUNTS)) || [];
+    // normalize: any account missing (or with an invalid) category defaults to "trafic"
+    // so pre-existing data from before this feature keeps working without loss.
+    return raw.map((a) => ({ ...a, category: a.category === "creatrice" ? "creatrice" : "trafic" }));
   } catch {
     return [];
   }
@@ -32,6 +37,11 @@ let entries = loadEntries();
 let variantChart = null;
 let trendChart = null;
 
+// which category is currently shown in the sidebar + Pouls des comptes
+let categoryFilter = "all";
+// which category will be assigned to the next account created
+let newAccountCategory = "trafic";
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -46,6 +56,10 @@ function channelColor(accountId) {
   return CHANNEL_COLORS[(idx < 0 ? 0 : idx) % CHANNEL_COLORS.length];
 }
 
+function accountsInCategory(category) {
+  return category === "all" ? accounts : accounts.filter((a) => a.category === category);
+}
+
 function escapeHtml(str) {
   const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   return String(str ?? "").replace(/[&<>"']/g, (c) => map[c]);
@@ -58,11 +72,26 @@ function formatCompact(n) {
   return String(v);
 }
 
+// --- segmented controls (category filter + new-account category picker) ---
+
+function setupSegmented(containerId, onSelect) {
+  const container = document.getElementById(containerId);
+  const buttons = [...container.querySelectorAll(".segmented-option")];
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      buttons.forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      onSelect(btn.dataset.category);
+    });
+  });
+}
+
 // --- account management ----------------------------------------------
 
 function renderAccountChips() {
   const wrap = document.getElementById("account-chips");
   wrap.innerHTML = "";
+
   if (accounts.length === 0) {
     const p = document.createElement("span");
     p.className = "signal-empty";
@@ -70,7 +99,17 @@ function renderAccountChips() {
     wrap.appendChild(p);
     return;
   }
-  accounts.forEach((acc) => {
+
+  const visible = accountsInCategory(categoryFilter);
+  if (visible.length === 0) {
+    const p = document.createElement("span");
+    p.className = "signal-empty";
+    p.textContent = "Aucun compte dans cette catégorie.";
+    wrap.appendChild(p);
+    return;
+  }
+
+  visible.forEach((acc) => {
     const chip = document.createElement("span");
     chip.className = "account-chip";
     const dot = document.createElement("span");
@@ -78,6 +117,9 @@ function renderAccountChips() {
     dot.style.background = channelColor(acc.id);
     const label = document.createElement("span");
     label.textContent = acc.name;
+    const badge = document.createElement("span");
+    badge.className = `cat-badge cat-${acc.category}`;
+    badge.textContent = CATEGORY_LABELS[acc.category];
     const del = document.createElement("button");
     del.textContent = "\u2715";
     del.title = "Supprimer ce compte (garde ses entrées dans le journal)";
@@ -86,7 +128,7 @@ function renderAccountChips() {
       saveAccounts(accounts);
       renderAll();
     });
-    chip.append(dot, label, del);
+    chip.append(dot, label, badge, del);
     wrap.appendChild(chip);
   });
 }
@@ -104,6 +146,7 @@ function populateAccountSelects() {
   chartFilter.innerHTML = '<option value="all">Tous les comptes</option>';
   logFilter.innerHTML = '<option value="all">Tous les comptes</option>';
 
+  // these selectors always list every account, regardless of the sidebar/Pouls category filter
   accounts.forEach((acc) => {
     const opt1 = document.createElement("option");
     opt1.value = acc.id;
@@ -144,7 +187,7 @@ function updateConsoleReadout() {
   el.textContent = `${accounts.length} ${chanLabel} · ${entries.length} ${entryLabel} · ${lastLabel}`;
 }
 
-// --- signal strip (signature element: EKG-style pulse trace per account) ---
+// --- signal strip (per-account pulse trace) ---
 
 function buildPulseTrace(accEntries, color) {
   const W = 600;
@@ -208,7 +251,13 @@ function renderSignalStrip() {
     return;
   }
 
-  accounts.forEach((acc) => {
+  const visible = accountsInCategory(categoryFilter);
+  if (visible.length === 0) {
+    wrap.innerHTML = '<p class="signal-empty">Aucun compte dans cette catégorie.</p>';
+    return;
+  }
+
+  visible.forEach((acc) => {
     const color = channelColor(acc.id);
     const accEntries = entries.filter((e) => e.accountId === acc.id).sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -223,6 +272,9 @@ function renderSignalStrip() {
     const name = document.createElement("span");
     name.className = "signal-row-name";
     name.textContent = acc.name;
+    const badge = document.createElement("span");
+    badge.className = `cat-badge cat-${acc.category}`;
+    badge.textContent = CATEGORY_LABELS[acc.category];
     const stat = document.createElement("span");
     stat.className = "signal-row-stat";
     if (accEntries.length > 0) {
@@ -232,7 +284,7 @@ function renderSignalStrip() {
     } else {
       stat.textContent = "aucune entrée";
     }
-    head.append(dot, name, stat);
+    head.append(dot, name, badge, stat);
     row.appendChild(head);
 
     const canvasWrap = document.createElement("div");
@@ -284,8 +336,8 @@ function renderVariantChart() {
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: "#7fa89a" }, grid: { color: "#16332b" } },
-        y: { ticks: { color: "#eaf6ef", font: { size: 11 } }, grid: { display: false } },
+        x: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
+        y: { ticks: { color: "#f2ebdd", font: { size: 11 } }, grid: { display: false } },
       },
     },
   });
@@ -348,12 +400,12 @@ function renderTrendChart() {
       plugins: {
         legend: {
           display: filter === "all",
-          labels: { color: "#eaf6ef", boxWidth: 10, font: { size: 11 } },
+          labels: { color: "#f2ebdd", boxWidth: 10, font: { size: 11 } },
         },
       },
       scales: {
-        x: { ticks: { color: "#7fa89a" }, grid: { color: "#16332b" } },
-        y: { ticks: { color: "#7fa89a" }, grid: { color: "#16332b" } },
+        x: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
+        y: { ticks: { color: "#a99a85" }, grid: { color: "#2a2119" } },
       },
     },
   });
@@ -423,11 +475,21 @@ function renderAll() {
   renderLogTable();
 }
 
+setupSegmented("category-filter", (value) => {
+  categoryFilter = value;
+  renderAccountChips();
+  renderSignalStrip();
+});
+
+setupSegmented("new-account-category", (value) => {
+  newAccountCategory = value;
+});
+
 document.getElementById("add-account-btn").addEventListener("click", () => {
   const input = document.getElementById("new-account-input");
   const name = input.value.trim();
   if (!name) return;
-  accounts.push({ id: uid(), name });
+  accounts.push({ id: uid(), name, category: newAccountCategory });
   saveAccounts(accounts);
   input.value = "";
   renderAll();
