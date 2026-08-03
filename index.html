@@ -39,6 +39,8 @@
               <button type="button" class="segmented-option is-active" data-category="trafic">Trafic</button>
               <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
             </div>
+            <input type="text" id="new-account-niche" list="niche-suggestions" placeholder="niche / modèle (optionnel)" />
+            <datalist id="niche-suggestions"></datalist>
             <div class="add-row">
               <input type="text" id="new-account-input" placeholder="nom_du_compte" />
               <button id="add-account-btn" class="btn-icon" aria-label="Ajouter un compte">+</button>
@@ -58,9 +60,48 @@
               <input type="date" id="entry-date" required />
             </label>
             <label>
-              Variante / concept
-              <input type="text" id="entry-variant" placeholder="ex : hook question, POV, transition..." required />
+              Label / concept (optionnel)
+              <input type="text" id="entry-label" placeholder="ex : hook question sur les ruptures" />
             </label>
+
+            <div class="tag-picker-grid" id="entry-tags">
+              <div class="tag-picker-group">
+                <span class="tag-picker-label">Hook</span>
+                <div class="tag-picker-row">
+                  <select class="tag-select" data-axis="hook" id="entry-tag-hook"></select>
+                  <button type="button" class="btn-icon tag-add-btn" data-axis="hook" aria-label="Ajouter un tag hook">+</button>
+                </div>
+              </div>
+              <div class="tag-picker-group">
+                <span class="tag-picker-label">Format</span>
+                <div class="tag-picker-row">
+                  <select class="tag-select" data-axis="format" id="entry-tag-format"></select>
+                  <button type="button" class="btn-icon tag-add-btn" data-axis="format" aria-label="Ajouter un tag format">+</button>
+                </div>
+              </div>
+              <div class="tag-picker-group">
+                <span class="tag-picker-label">Longueur</span>
+                <div class="tag-picker-row">
+                  <select class="tag-select" data-axis="longueur" id="entry-tag-longueur"></select>
+                  <button type="button" class="btn-icon tag-add-btn" data-axis="longueur" aria-label="Ajouter un tag longueur">+</button>
+                </div>
+              </div>
+              <div class="tag-picker-group">
+                <span class="tag-picker-label">CTA</span>
+                <div class="tag-picker-row">
+                  <select class="tag-select" data-axis="cta" id="entry-tag-cta"></select>
+                  <button type="button" class="btn-icon tag-add-btn" data-axis="cta" aria-label="Ajouter un tag CTA">+</button>
+                </div>
+              </div>
+              <div class="tag-picker-group">
+                <span class="tag-picker-label">Son</span>
+                <div class="tag-picker-row">
+                  <select class="tag-select" data-axis="son" id="entry-tag-son"></select>
+                  <button type="button" class="btn-icon tag-add-btn" data-axis="son" aria-label="Ajouter un tag son">+</button>
+                </div>
+              </div>
+            </div>
+
             <div class="metric-grid">
               <label>
                 Vues
@@ -98,6 +139,133 @@
           <div id="signal-strip" class="signal-strip"></div>
         </section>
 
+        <section class="insights-section" id="insights-section">
+          <div class="insights-head">
+            <h2>Insights — quoi dupliquer</h2>
+            <div class="insights-filters">
+              <div class="segmented" id="insights-category-filter">
+                <button type="button" class="segmented-option is-active" data-category="all">Tous</button>
+                <button type="button" class="segmented-option" data-category="trafic">Trafic</button>
+                <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
+              </div>
+              <select id="insights-niche-filter">
+                <option value="all">Toutes les niches</option>
+              </select>
+              <div class="segmented" id="insights-metric-toggle">
+                <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
+                <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
+              </div>
+            </div>
+          </div>
+
+          <p id="insights-empty" class="signal-empty" style="display: none">Pas encore assez de données pour ce filtre.</p>
+
+          <div class="insights-grid" id="insights-grid">
+            <div class="chart-card chart-card-mini">
+              <h2>Hook</h2>
+              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-hook"></canvas></div>
+            </div>
+            <div class="chart-card chart-card-mini">
+              <h2>Format</h2>
+              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-format"></canvas></div>
+            </div>
+            <div class="chart-card chart-card-mini">
+              <h2>Longueur</h2>
+              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-longueur"></canvas></div>
+            </div>
+            <div class="chart-card chart-card-mini">
+              <h2>CTA</h2>
+              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-cta"></canvas></div>
+            </div>
+            <div class="chart-card chart-card-mini">
+              <h2>Son</h2>
+              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-son"></canvas></div>
+            </div>
+          </div>
+
+          <div class="log-section">
+            <div class="log-head">
+              <h2>Top contenus</h2>
+              <select id="insights-leaderboard-sort">
+                <option value="views">Trier par vues</option>
+                <option value="engagement">Trier par engagement</option>
+              </select>
+            </div>
+            <div class="log-table-wrap">
+              <table id="insights-leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Compte</th>
+                    <th>Niche</th>
+                    <th>Date</th>
+                    <th>Contenu</th>
+                    <th>Vues</th>
+                    <th>Engagement</th>
+                  </tr>
+                </thead>
+                <tbody id="insights-leaderboard-body"></tbody>
+              </table>
+              <p id="insights-leaderboard-empty" class="log-empty" style="display: none">Aucun contenu pour l'instant.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="conversion-section" id="conversion-section">
+          <h2>Conversion — clics &amp; abonnés</h2>
+          <form id="conversion-form" class="conversion-form">
+            <label>
+              Compte
+              <select id="conversion-form-account" required></select>
+            </label>
+            <label>
+              Date
+              <input type="date" id="conversion-form-date" required />
+            </label>
+            <label>
+              Clics lien bio
+              <input type="number" id="conversion-form-clicks" min="0" value="0" />
+            </label>
+            <label>
+              Nouveaux abonnés
+              <input type="number" id="conversion-form-subs" min="0" value="0" />
+            </label>
+            <label>
+              Revenu (€, optionnel)
+              <input type="number" id="conversion-form-revenue" min="0" step="0.01" />
+            </label>
+            <button type="submit" class="btn-primary">Enregistrer</button>
+          </form>
+
+          <div class="chart-card">
+            <div class="chart-card-head">
+              <h2>Contenu vs conversion</h2>
+              <select id="conversion-account-filter"></select>
+            </div>
+            <div class="chart-wrap chart-wrap-dual">
+              <canvas id="conversion-chart"></canvas>
+              <p id="conversion-chart-empty" class="signal-empty" style="display: none">Pas encore de données de conversion.</p>
+            </div>
+          </div>
+
+          <div class="log-table-wrap conversion-log-wrap">
+            <table id="conversion-log-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Compte</th>
+                  <th>Clics</th>
+                  <th>Abonnés</th>
+                  <th>Revenu</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="conversion-log-body"></tbody>
+            </table>
+            <p id="conversion-log-empty" class="log-empty" style="display: none">Aucune donnée de conversion pour l'instant.</p>
+          </div>
+        </section>
+
         <section class="chart-section">
           <div class="chart-card">
             <div class="chart-card-head">
@@ -127,7 +295,7 @@
                 <tr>
                   <th>Date</th>
                   <th>Compte</th>
-                  <th>Variante</th>
+                  <th>Contenu</th>
                   <th>Vues</th>
                   <th>Likes</th>
                   <th>Comm.</th>

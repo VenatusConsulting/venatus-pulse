@@ -61,6 +61,7 @@ body {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .brand {
@@ -251,10 +252,33 @@ body {
   margin: 0;
 }
 
+.chip-niche {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--sand-dim);
+  font-style: italic;
+}
+
 .add-account-block {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.add-account-block input {
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--cream);
+  font-family: var(--font-data);
+  font-size: 13px;
+  padding: 9px 10px;
+}
+
+.add-account-block input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
 }
 
 .add-row {
@@ -312,6 +336,9 @@ body {
   padding: 9px 10px;
   text-transform: none;
   letter-spacing: normal;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .entry-form textarea {
@@ -322,8 +349,7 @@ body {
 
 .entry-form input:focus,
 .entry-form select:focus,
-.entry-form textarea:focus,
-.new-account-block input:focus {
+.entry-form textarea:focus {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 0 1px var(--gold);
@@ -333,6 +359,66 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* --- structured tag pickers (hook/format/longueur/cta/son) ------------- */
+
+.tag-picker-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tag-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tag-picker-label {
+  font-size: 11px;
+  color: var(--sand);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tag-picker-row {
+  display: flex;
+  gap: 6px;
+}
+
+.tag-picker-row select {
+  flex: 1;
+  min-width: 0;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--cream);
+  font-family: var(--font-data);
+  font-size: 13px;
+  padding: 9px 10px;
+}
+
+.tag-picker-row select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.tag-chip-row {
+  margin-top: 4px;
+}
+
+.tag-chip {
+  font-family: var(--font-data);
+  font-size: 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  color: var(--sand);
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin: 2px 3px 0 0;
+  display: inline-block;
 }
 
 .btn-primary {
@@ -543,6 +629,121 @@ body {
   height: 220px;
 }
 
+/* --- insights section (structured tag breakdowns + leaderboard) -------- */
+
+.insights-section {
+  margin-bottom: 34px;
+}
+
+.insights-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.insights-head h2 {
+  margin: 0;
+}
+
+.insights-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.chart-card-mini h2 {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.chart-wrap-mini {
+  height: 160px;
+}
+
+.rank-badge {
+  font-family: var(--font-data);
+  font-weight: 700;
+}
+
+.rank-1 {
+  color: var(--gold);
+}
+
+.rank-2 {
+  color: var(--slate);
+}
+
+.rank-3 {
+  color: #b5895a;
+}
+
+/* --- conversion section (daily clicks / new subs vs content) ----------- */
+
+.conversion-section {
+  margin-bottom: 34px;
+}
+
+.conversion-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin: 0 0 18px 0;
+}
+
+.conversion-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--sand);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.conversion-form input,
+.conversion-form select {
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--cream);
+  font-family: var(--font-data);
+  font-size: 13px;
+  padding: 9px 10px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.conversion-form input:focus,
+.conversion-form select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.conversion-form .btn-primary {
+  margin-top: 0;
+}
+
+.chart-wrap-dual {
+  height: 260px;
+}
+
+.conversion-log-wrap {
+  margin-top: 18px;
+}
+
 select {
   background: var(--surface-raised);
   border: 1px solid var(--line);
@@ -653,5 +854,12 @@ td.peak-views {
   }
   .chart-section {
     grid-template-columns: 1fr;
+  }
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+  .conversion-form {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
