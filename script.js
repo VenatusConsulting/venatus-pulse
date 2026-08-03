@@ -143,6 +143,9 @@ let insightsSort = "views"; // "views" | "engagement"
 // active tab within the account view
 let activeTab = "dashboard";
 
+// id of the entry currently being edited via the sidebar form, or null when adding a new one
+let editingEntryId = null;
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -190,6 +193,15 @@ function entryLabel(e) {
   const tags = e.tags || {};
   const meaningful = TAG_AXES.map((axis) => tags[axis]).filter((t) => t && t !== TAG_UNCLASSIFIED);
   return meaningful.length ? meaningful.join(" · ") : "(sans label)";
+}
+
+// days elapsed since a reel was posted — used to nudge the user to come back
+// and log the settled view/like counts once a post's growth has flattened out
+function daysSince(dateStr) {
+  const posted = new Date(dateStr);
+  if (isNaN(posted)) return 0;
+  const diffMs = new Date().setHours(0, 0, 0, 0) - posted.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round(diffMs / 86400000));
 }
 
 function tagChipsHtml(tags) {
@@ -342,6 +354,7 @@ function goToModels() {
   currentView = "models";
   currentNiche = null;
   currentAccountId = null;
+  editingEntryId = null;
   renderCurrentView();
 }
 
@@ -349,6 +362,7 @@ function goToModel(niche) {
   currentView = "model";
   currentNiche = niche === "" ? "" : resolveNicheCasing(niche);
   currentAccountId = null;
+  editingEntryId = null;
   renderCurrentView();
 }
 
@@ -359,6 +373,7 @@ function goToAccount(accountId) {
   currentAccountId = accountId;
   currentNiche = acc.niche || "";
   activeTab = "dashboard";
+  editingEntryId = null;
   renderCurrentView();
 }
 
@@ -543,6 +558,8 @@ function renderAccountView() {
   setStatSlot("d", "Nouveaux abonnés", stats.totalNewSubs.toLocaleString("fr-FR"));
 
   populateTagSelects();
+  document.getElementById("entry-form-submit").textContent = editingEntryId ? "Mettre à jour l'entrée" : "Enregistrer l'entrée";
+  document.getElementById("entry-form-cancel").hidden = !editingEntryId;
   renderActiveTab();
 }
 
@@ -700,14 +717,29 @@ function renderTrendChart() {
 
 // --- journal tab (single account) -------------------------------------------
 
+function renderReviewBanner(accountEntries) {
+  const banner = document.getElementById("review-banner");
+  const staleCount = accountEntries.filter((e) => daysSince(e.date) >= 7).length;
+  if (staleCount === 0) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  banner.textContent =
+    staleCount > 1
+      ? `⚠️ ${staleCount} reels postés depuis plus de 7 jours — pense à vérifier/mettre à jour leurs stats définitives.`
+      : `⚠️ 1 reel posté depuis plus de 7 jours — pense à vérifier/mettre à jour ses stats définitives.`;
+}
+
 function renderLogTable() {
   const body = document.getElementById("log-body");
   const emptyMsg = document.getElementById("log-empty");
   body.innerHTML = "";
 
-  const filtered = entriesForAccount(currentAccountId)
-    .slice()
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const accountEntries = entriesForAccount(currentAccountId);
+  renderReviewBanner(accountEntries);
+
+  const filtered = accountEntries.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 
   if (filtered.length === 0) {
     emptyMsg.style.display = "block";
@@ -720,8 +752,10 @@ function renderLogTable() {
   filtered.forEach((e) => {
     const tr = document.createElement("tr");
     const isPeak = maxViews > 0 && Number(e.views || 0) === maxViews;
+    const age = daysSince(e.date);
+    const ageBadge = `<span class="${age >= 7 ? "review-badge" : "day-count"}">J+${age}</span>`;
     tr.innerHTML = `
-      <td>${escapeHtml(e.date)}</td>
+      <td>${escapeHtml(e.date)}<br>${ageBadge}</td>
       <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
@@ -729,7 +763,13 @@ function renderLogTable() {
       <td>${Number(e.shares || 0).toLocaleString("fr-FR")}</td>
       <td class="notes-cell">${escapeHtml(e.notes || "")}</td>
     `;
-    const delTd = document.createElement("td");
+    const actionsTd = document.createElement("td");
+    actionsTd.className = "row-actions";
+    const editBtn = document.createElement("button");
+    editBtn.className = "row-edit";
+    editBtn.textContent = "✎";
+    editBtn.title = "Modifier cette entrée";
+    editBtn.addEventListener("click", () => startEditEntry(e.id));
     const delBtn = document.createElement("button");
     delBtn.className = "row-delete";
     delBtn.textContent = "✕";
@@ -737,12 +777,46 @@ function renderLogTable() {
     delBtn.addEventListener("click", () => {
       entries = entries.filter((x) => x.id !== e.id);
       saveEntries(entries);
+      if (editingEntryId === e.id) cancelEditEntry();
       renderCurrentView();
     });
-    delTd.appendChild(delBtn);
-    tr.appendChild(delTd);
+    actionsTd.append(editBtn, delBtn);
+    tr.appendChild(actionsTd);
     body.appendChild(tr);
   });
+}
+
+function startEditEntry(entryId) {
+  const entry = entries.find((e) => e.id === entryId);
+  if (!entry) return;
+  editingEntryId = entryId;
+
+  document.getElementById("entry-date").value = entry.date;
+  document.getElementById("entry-label").value = entry.label || "";
+  TAG_AXES.forEach((axis) => {
+    const select = document.getElementById(`entry-tag-${axis}`);
+    if (select) select.value = (entry.tags && entry.tags[axis]) || TAG_UNCLASSIFIED;
+  });
+  document.getElementById("entry-views").value = entry.views;
+  document.getElementById("entry-likes").value = entry.likes;
+  document.getElementById("entry-comments").value = entry.comments;
+  document.getElementById("entry-shares").value = entry.shares;
+  document.getElementById("entry-notes").value = entry.notes || "";
+
+  document.getElementById("entry-form-submit").textContent = "Mettre à jour l'entrée";
+  document.getElementById("entry-form-cancel").hidden = false;
+
+  switchTab("journal");
+}
+
+function cancelEditEntry() {
+  editingEntryId = null;
+  const form = document.getElementById("entry-form");
+  form.reset();
+  document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
+  populateTagSelects();
+  document.getElementById("entry-form-submit").textContent = "Enregistrer l'entrée";
+  document.getElementById("entry-form-cancel").hidden = true;
 }
 
 // --- insights tab (single account) ------------------------------------------
@@ -1108,8 +1182,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
     const select = document.getElementById(`entry-tag-${axis}`);
     tags[axis] = select ? select.value : TAG_UNCLASSIFIED;
   });
-  entries.push({
-    id: uid(),
+  const payload = {
     accountId: currentAccountId,
     date: document.getElementById("entry-date").value,
     label: document.getElementById("entry-label").value.trim(),
@@ -1119,11 +1192,21 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
     comments: document.getElementById("entry-comments").value,
     shares: document.getElementById("entry-shares").value,
     notes: document.getElementById("entry-notes").value.trim(),
-  });
+  };
+
+  if (editingEntryId) {
+    const idx = entries.findIndex((x) => x.id === editingEntryId);
+    if (idx !== -1) entries[idx] = { ...entries[idx], ...payload };
+  } else {
+    entries.push({ id: uid(), ...payload });
+  }
   saveEntries(entries);
-  e.target.reset();
-  document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
+  cancelEditEntry();
   renderCurrentView();
+});
+
+document.getElementById("entry-form-cancel").addEventListener("click", () => {
+  cancelEditEntry();
 });
 
 document.getElementById("conversion-form").addEventListener("submit", (e) => {

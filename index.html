@@ -100,7 +100,10 @@
               Notes
               <textarea id="entry-notes" placeholder="Ce qui a marché ou pas, contexte..."></textarea>
             </label>
-            <button type="submit" class="btn-primary">Enregistrer l'entrée</button>
+            <div class="entry-form-actions">
+              <button type="submit" class="btn-primary" id="entry-form-submit">Enregistrer l'entrée</button>
+              <button type="button" class="btn-secondary" id="entry-form-cancel" hidden>Annuler</button>
+            </div>
           </form>
         </section>
       </aside>
@@ -282,6 +285,7 @@
           </section>
 
           <section class="tab-panel" id="tab-journal" data-tab-panel="journal" hidden>
+            <div class="review-banner" id="review-banner" hidden></div>
             <div class="table-card">
               <div class="table-card-head">
                 <h2 class="section-title">Journal complet</h2>
