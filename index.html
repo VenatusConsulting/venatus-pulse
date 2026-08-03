@@ -13,12 +13,40 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app">
+    <div class="login-screen" id="view-login">
+      <div class="login-card">
+        <div class="brand brand-center">
+          <span class="brand-mark">V</span>
+          <span class="brand-name">Venatus Pulse</span>
+        </div>
+        <form id="login-form">
+          <label>
+            Email
+            <input type="email" id="login-email" required autocomplete="username" />
+          </label>
+          <label>
+            Mot de passe
+            <input type="password" id="login-password" required autocomplete="current-password" />
+          </label>
+          <p class="login-error" id="login-error" hidden></p>
+          <button type="submit" class="btn-primary">Se connecter</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="loading-screen" id="view-loading" hidden>
+      <p>Chargement de vos données…</p>
+    </div>
+
+    <div class="app" id="app-root" hidden>
       <aside class="rail">
         <div class="brand">
           <span class="brand-mark">V</span>
           <span class="brand-name">Venatus Pulse</span>
+          <button type="button" class="btn-text logout-btn" id="logout-btn" title="Se déconnecter">Déconnexion</button>
         </div>
+
+        <p class="sync-banner" id="sync-banner" hidden></p>
 
         <section class="rail-section" id="sidebar-add-account" hidden>
           <h2>Ajouter un compte</h2>
@@ -414,6 +442,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

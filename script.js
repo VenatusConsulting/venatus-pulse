@@ -3,6 +3,7 @@ const STORAGE_ENTRIES = "signal_entries";
 const STORAGE_CONVERSIONS = "signal_conversions";
 const STORAGE_TAG_VOCAB = "signal_tag_vocab";
 const STORAGE_MODELS = "signal_models";
+const STORAGE_PENDING_SYNC = "signal_pending_sync";
 
 // one color per channel — reused consistently across account cards, pulse traces and charts.
 // fixed CVD-safe order (never cycled/reassigned) — see dataviz skill's validated palette.
@@ -29,27 +30,38 @@ const PREDEFINED_TAGS = {
   son: ["Audio tendance", "Musique originale", "Voix seule", "Silence"],
 };
 
-// --- storage --------------------------------------------------------
+// --- supabase client -------------------------------------------------------
 
-function loadAccounts() {
+const SUPABASE_URL = "https://uzcwvdmjqiborxqaiwng.supabase.co";
+const SUPABASE_KEY = "sb_publishable_14rnqrufRLxwD6BlldQHvQ_PdErSlTX";
+// named supabaseClient (not `supabase`) so it doesn't shadow the CDN's global namespace
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// --- storage (localStorage = offline cache, Supabase = source of truth) ----
+
+function normalizeAccount(a) {
+  // defaults for every field so pre-existing/partial data keeps working without loss.
+  // (category is a leftover field on older records; no longer read anywhere)
+  return {
+    ...a,
+    niche: typeof a.niche === "string" ? a.niche : "",
+    createdDate: typeof a.createdDate === "string" ? a.createdDate : "",
+    creationMethod: typeof a.creationMethod === "string" ? a.creationMethod : "",
+    status: ACCOUNT_STATUSES.includes(a.status) ? a.status : "actif",
+    warmup: typeof a.warmup === "string" ? a.warmup : "",
+    accountNotes: typeof a.accountNotes === "string" ? a.accountNotes : "",
+  };
+}
+
+function loadAccountsLocal() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_ACCOUNTS)) || [];
-    // normalize: defaults for every field so pre-existing data keeps working without loss.
-    // (category is a leftover field on older records; no longer read anywhere)
-    return raw.map((a) => ({
-      ...a,
-      niche: typeof a.niche === "string" ? a.niche : "",
-      createdDate: typeof a.createdDate === "string" ? a.createdDate : "",
-      creationMethod: typeof a.creationMethod === "string" ? a.creationMethod : "",
-      status: ACCOUNT_STATUSES.includes(a.status) ? a.status : "actif",
-      warmup: typeof a.warmup === "string" ? a.warmup : "",
-      accountNotes: typeof a.accountNotes === "string" ? a.accountNotes : "",
-    }));
+    return raw.map(normalizeAccount);
   } catch {
     return [];
   }
 }
-function saveAccounts(accounts) {
+function saveAccountsLocal(accounts) {
   localStorage.setItem(STORAGE_ACCOUNTS, JSON.stringify(accounts));
 }
 
@@ -75,7 +87,7 @@ function migrateEntry(e) {
     notes: e.notes,
   };
 }
-function loadEntries() {
+function loadEntriesLocal() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_ENTRIES)) || [];
     return raw.map(migrateEntry);
@@ -83,22 +95,22 @@ function loadEntries() {
     return [];
   }
 }
-function saveEntries(entries) {
+function saveEntriesLocal(entries) {
   localStorage.setItem(STORAGE_ENTRIES, JSON.stringify(entries));
 }
 
-function loadConversions() {
+function loadConversionsLocal() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_CONVERSIONS)) || [];
   } catch {
     return [];
   }
 }
-function saveConversions(conversions) {
+function saveConversionsLocal(conversions) {
   localStorage.setItem(STORAGE_CONVERSIONS, JSON.stringify(conversions));
 }
 
-function loadTagVocab() {
+function loadTagVocabLocal() {
   const vocab = {};
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_TAG_VOCAB)) || {};
@@ -112,11 +124,11 @@ function loadTagVocab() {
   }
   return vocab;
 }
-function saveTagVocab(vocab) {
+function saveTagVocabLocal(vocab) {
   localStorage.setItem(STORAGE_TAG_VOCAB, JSON.stringify(vocab));
 }
 
-function loadModels() {
+function loadModelsLocal() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_MODELS)) || [];
     return raw.map((m) => (typeof m === "string" ? m.trim() : "")).filter(Boolean);
@@ -124,15 +136,113 @@ function loadModels() {
     return [];
   }
 }
-function saveModels(models) {
+function saveModelsLocal(models) {
   localStorage.setItem(STORAGE_MODELS, JSON.stringify(models));
 }
 
-let accounts = loadAccounts();
-let entries = loadEntries();
-let conversions = loadConversions();
-let tagVocab = loadTagVocab();
-let models = loadModels();
+function loadPendingSyncLocal() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_PENDING_SYNC)) || [];
+  } catch {
+    return [];
+  }
+}
+function savePendingSyncLocal(queue) {
+  localStorage.setItem(STORAGE_PENDING_SYNC, JSON.stringify(queue));
+}
+
+let accounts = loadAccountsLocal();
+let entries = loadEntriesLocal();
+let conversions = loadConversionsLocal();
+let tagVocab = loadTagVocabLocal();
+let models = loadModelsLocal();
+let pendingSync = loadPendingSyncLocal();
+
+// --- db row <-> app-shape mappers -------------------------------------------
+
+function mapAccountToDb(a) {
+  return {
+    id: a.id,
+    name: a.name,
+    niche: a.niche || "",
+    status: a.status || "actif",
+    created_date: a.createdDate || "",
+    creation_method: a.creationMethod || "",
+    warmup: a.warmup || "",
+    account_notes: a.accountNotes || "",
+  };
+}
+function mapAccountFromDb(row) {
+  return normalizeAccount({
+    id: row.id,
+    name: row.name,
+    niche: row.niche,
+    status: row.status,
+    createdDate: row.created_date,
+    creationMethod: row.creation_method,
+    warmup: row.warmup,
+    accountNotes: row.account_notes,
+  });
+}
+
+function mapEntryToDb(e) {
+  return {
+    id: e.id,
+    account_id: e.accountId,
+    date: e.date,
+    label: e.label || "",
+    tags: e.tags || {},
+    views: e.views,
+    likes: e.likes,
+    comments: e.comments,
+    shares: e.shares,
+    notes: e.notes || "",
+  };
+}
+function mapEntryFromDb(row) {
+  return migrateEntry({
+    id: row.id,
+    accountId: row.account_id,
+    date: row.date,
+    label: row.label,
+    tags: row.tags,
+    views: row.views,
+    likes: row.likes,
+    comments: row.comments,
+    shares: row.shares,
+    notes: row.notes,
+  });
+}
+
+function mapConversionToDb(c) {
+  return {
+    id: c.id,
+    account_id: c.accountId,
+    date: c.date,
+    link_clicks: c.linkClicks,
+    new_subs: c.newSubs,
+    revenue: c.revenue || "",
+  };
+}
+function mapConversionFromDb(row) {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    date: row.date,
+    linkClicks: row.link_clicks,
+    newSubs: row.new_subs,
+    revenue: row.revenue,
+  };
+}
+
+function mapTagVocabFromDb(rows) {
+  const vocab = {};
+  TAG_AXES.forEach((axis) => {
+    const row = rows.find((r) => r.axis === axis);
+    vocab[axis] = row && Array.isArray(row.values) ? row.values : [];
+  });
+  return vocab;
+}
 
 let trendChart = null;
 let insightsCharts = {}; // { hook: Chart, format: Chart, ... }
@@ -160,6 +270,159 @@ let editingEntryId = null;
 
 // whether the "Infos du compte" card is in edit mode
 let editingAccountInfo = false;
+
+// --- sync queue (persisted — a failed cloud write is retried, never silently dropped) ---
+
+function queueSync(table, op, payload) {
+  // op: "upsert" | "delete"
+  pendingSync.push({ table, op, payload, ts: Date.now() });
+  savePendingSyncLocal(pendingSync);
+  updateSyncBanner();
+  flushPendingSync();
+}
+
+async function flushPendingSync() {
+  if (pendingSync.length === 0) return;
+  const remaining = [];
+  for (const item of pendingSync) {
+    try {
+      const { error } =
+        item.op === "upsert"
+          ? await supabaseClient.from(item.table).upsert(item.payload)
+          : await supabaseClient.from(item.table).delete().eq("id", item.payload.id);
+      if (error) throw error;
+    } catch {
+      remaining.push(item);
+    }
+  }
+  pendingSync = remaining;
+  savePendingSyncLocal(pendingSync);
+  updateSyncBanner();
+}
+
+function updateSyncBanner() {
+  const banner = document.getElementById("sync-banner");
+  if (!banner) return;
+  if (pendingSync.length === 0) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  banner.textContent = `⚠️ ${pendingSync.length} changement${pendingSync.length > 1 ? "s" : ""} en attente de synchronisation avec le cloud.`;
+}
+
+window.addEventListener("online", flushPendingSync);
+
+// --- boot: auth gate -> cloud fetch (local fallback) -> first render -------
+
+function showView(name) {
+  document.getElementById("view-login").hidden = name !== "login";
+  document.getElementById("view-loading").hidden = name !== "loading";
+  document.getElementById("app-root").hidden = name !== "app";
+}
+
+async function loadAllData() {
+  try {
+    const [a, e, c, m, t] = await Promise.all([
+      supabaseClient.from("accounts").select("*"),
+      supabaseClient.from("entries").select("*"),
+      supabaseClient.from("conversions").select("*"),
+      supabaseClient.from("models").select("*"),
+      supabaseClient.from("tag_vocab").select("*"),
+    ]);
+    const firstError = a.error || e.error || c.error || m.error || t.error;
+    if (firstError) throw firstError;
+
+    const cloudWasEmpty = a.data.length === 0;
+    const localAccounts = loadAccountsLocal();
+
+    accounts = a.data.map(mapAccountFromDb);
+    entries = e.data.map(mapEntryFromDb);
+    conversions = c.data.map(mapConversionFromDb);
+    models = m.data.map((row) => row.name);
+    tagVocab = mapTagVocabFromDb(t.data);
+
+    if (cloudWasEmpty && localAccounts.length > 0) {
+      // filet de sécurité : un utilisateur qui avait déjà des données locales (avant Supabase)
+      // ne doit pas les voir disparaître silencieusement — on les pousse une fois vers le cloud.
+      await migrateLocalDataToCloud();
+    }
+
+    saveAccountsLocal(accounts);
+    saveEntriesLocal(entries);
+    saveConversionsLocal(conversions);
+    saveModelsLocal(models);
+    saveTagVocabLocal(tagVocab);
+  } catch (err) {
+    console.warn("Supabase indisponible, repli sur le cache local", err);
+    accounts = loadAccountsLocal();
+    entries = loadEntriesLocal();
+    conversions = loadConversionsLocal();
+    models = loadModelsLocal();
+    tagVocab = loadTagVocabLocal();
+  }
+  updateSyncBanner();
+  flushPendingSync();
+}
+
+async function migrateLocalDataToCloud() {
+  const localAccounts = loadAccountsLocal();
+  const localEntries = loadEntriesLocal();
+  const localConversions = loadConversionsLocal();
+  const localModels = loadModelsLocal();
+  const localTagVocab = loadTagVocabLocal();
+
+  accounts = localAccounts;
+  entries = localEntries;
+  conversions = localConversions;
+  models = localModels;
+  tagVocab = localTagVocab;
+
+  if (localAccounts.length) await supabaseClient.from("accounts").upsert(localAccounts.map(mapAccountToDb));
+  if (localEntries.length) await supabaseClient.from("entries").upsert(localEntries.map(mapEntryToDb));
+  if (localConversions.length) await supabaseClient.from("conversions").upsert(localConversions.map(mapConversionToDb));
+  if (localModels.length) await supabaseClient.from("models").upsert(localModels.map((name) => ({ name })));
+  const tagRows = TAG_AXES.filter((axis) => (localTagVocab[axis] || []).length > 0).map((axis) => ({ axis, values: localTagVocab[axis] }));
+  if (tagRows.length) await supabaseClient.from("tag_vocab").upsert(tagRows);
+}
+
+async function boot() {
+  const {
+    data: { session },
+  } = await supabaseClient.auth.getSession();
+  if (!session) {
+    showView("login");
+    return;
+  }
+  showView("loading");
+  await loadAllData();
+  showView("app");
+  renderCurrentView();
+}
+
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  if (!session) showView("login");
+});
+
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  const errorEl = document.getElementById("login-error");
+  errorEl.hidden = true;
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    errorEl.textContent = "Email ou mot de passe incorrect.";
+    errorEl.hidden = false;
+    return;
+  }
+  boot();
+});
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  showView("login");
+});
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -282,7 +545,10 @@ function addCustomTag(axis, value) {
   const existing = tagOptionsFor(axis).map((t) => t.toLowerCase());
   if (existing.includes(trimmed.toLowerCase())) return false;
   tagVocab[axis] = [...(tagVocab[axis] || []), trimmed];
-  saveTagVocab(tagVocab);
+  saveTagVocabLocal(tagVocab);
+  // one row per axis — never the whole tagVocab object, or a sibling axis edited
+  // elsewhere between sessions would get silently clobbered by this upsert.
+  queueSync("tag_vocab", "upsert", { axis, values: tagVocab[axis] });
   return true;
 }
 
@@ -290,14 +556,18 @@ function addCustomTag(axis, value) {
 
 function upsertConversion(accountId, date, linkClicks, newSubs, revenue) {
   const existing = conversions.find((c) => c.accountId === accountId && c.date === date);
+  let row;
   if (existing) {
     existing.linkClicks = linkClicks;
     existing.newSubs = newSubs;
     existing.revenue = revenue;
+    row = existing;
   } else {
-    conversions.push({ id: uid(), accountId, date, linkClicks, newSubs, revenue });
+    row = { id: uid(), accountId, date, linkClicks, newSubs, revenue };
+    conversions.push(row);
   }
-  saveConversions(conversions);
+  saveConversionsLocal(conversions);
+  queueSync("conversions", "upsert", mapConversionToDb(row));
 }
 
 // --- segmented controls ---------------------------------------------------
@@ -628,9 +898,12 @@ function deleteAccount(accountId) {
   entries = entries.filter((e) => e.accountId !== accountId);
   conversions = conversions.filter((c) => c.accountId !== accountId);
   accounts = accounts.filter((a) => a.id !== accountId);
-  saveEntries(entries);
-  saveConversions(conversions);
-  saveAccounts(accounts);
+  saveEntriesLocal(entries);
+  saveConversionsLocal(conversions);
+  saveAccountsLocal(accounts);
+  // on delete cascade (DB side) removes that account's entries/conversions in Supabase too —
+  // no need to also queue separate deletes for them here.
+  queueSync("accounts", "delete", { id: accountId });
 
   if (currentAccountId === accountId) goToModel(currentNiche);
   else renderCurrentView();
@@ -932,7 +1205,8 @@ function renderLogTable() {
     delBtn.title = "Supprimer cette entrée";
     delBtn.addEventListener("click", () => {
       entries = entries.filter((x) => x.id !== e.id);
-      saveEntries(entries);
+      saveEntriesLocal(entries);
+      queueSync("entries", "delete", { id: e.id });
       if (editingEntryId === e.id) cancelEditEntry();
       renderCurrentView();
     });
@@ -1249,7 +1523,8 @@ function renderConversionLogTable() {
     delBtn.title = "Supprimer cette entrée";
     delBtn.addEventListener("click", () => {
       conversions = conversions.filter((x) => x.id !== c.id);
-      saveConversions(conversions);
+      saveConversionsLocal(conversions);
+      queueSync("conversions", "delete", { id: c.id });
       renderCurrentView();
     });
     delTd.appendChild(delBtn);
@@ -1268,7 +1543,8 @@ document.getElementById("add-model-btn").addEventListener("click", () => {
   const exists = allModelNames().some((m) => m.toLowerCase() === trimmed.toLowerCase());
   if (!exists) {
     models.push(trimmed);
-    saveModels(models);
+    saveModelsLocal(models);
+    queueSync("models", "upsert", { name: trimmed });
   }
   goToModel(trimmed);
 });
@@ -1328,8 +1604,10 @@ document.getElementById("add-account-btn").addEventListener("click", () => {
   const input = document.getElementById("new-account-input");
   const name = input.value.trim();
   if (!name) return;
-  accounts.push({ id: uid(), name, niche: currentNiche || "" });
-  saveAccounts(accounts);
+  const newAccount = { id: uid(), name, niche: currentNiche || "" };
+  accounts.push(newAccount);
+  saveAccountsLocal(accounts);
+  queueSync("accounts", "upsert", mapAccountToDb(normalizeAccount(newAccount)));
   input.value = "";
   renderCurrentView();
 });
@@ -1360,13 +1638,19 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
     notes: document.getElementById("entry-notes").value.trim(),
   };
 
+  let savedEntry;
   if (editingEntryId) {
     const idx = entries.findIndex((x) => x.id === editingEntryId);
-    if (idx !== -1) entries[idx] = { ...entries[idx], ...payload };
+    if (idx !== -1) {
+      entries[idx] = { ...entries[idx], ...payload };
+      savedEntry = entries[idx];
+    }
   } else {
-    entries.push({ id: uid(), ...payload });
+    savedEntry = { id: uid(), ...payload };
+    entries.push(savedEntry);
   }
-  saveEntries(entries);
+  saveEntriesLocal(entries);
+  if (savedEntry) queueSync("entries", "upsert", mapEntryToDb(savedEntry));
   cancelEditEntry();
   renderCurrentView();
 });
@@ -1386,7 +1670,8 @@ document.getElementById("account-info-form").addEventListener("submit", (e) => {
   acc.status = document.getElementById("account-info-status").value;
   acc.warmup = document.getElementById("account-info-warmup").value.trim();
   acc.accountNotes = document.getElementById("account-info-notes").value.trim();
-  saveAccounts(accounts);
+  saveAccountsLocal(accounts);
+  queueSync("accounts", "upsert", mapAccountToDb(acc));
   cancelEditAccountInfo();
   renderCurrentView();
 });
@@ -1410,4 +1695,5 @@ wireTagAddButtons();
 
 document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
 document.getElementById("conversion-form-date").value = new Date().toISOString().slice(0, 10);
-renderCurrentView();
+
+boot();
