@@ -156,34 +156,7 @@ body {
   font-weight: 600;
 }
 
-#category-filter {
-  margin-bottom: 12px;
-}
-
-.niche-filter-select {
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-/* --- account chips + category badges ----------------------------------- */
-
-.account-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.account-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 5px 10px;
-  font-size: 12px;
-}
+/* --- category badges ---------------------------------------------------- */
 
 .chip-dot {
   width: 7px;
@@ -211,53 +184,14 @@ body {
   background: var(--accent-soft);
 }
 
-.account-chip button {
-  background: transparent;
-  border: none;
-  color: var(--ink-muted);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0;
-  line-height: 1;
-}
-
-.account-chip button:hover {
-  color: var(--danger);
-}
-
 .empty-hint {
   font-size: 12px;
   color: var(--ink-muted);
   margin: 0;
 }
 
-.chip-niche {
-  font-size: 11px;
-  color: var(--ink-muted);
-  font-style: italic;
-}
-
-.add-account-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.add-account-block input {
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--ink);
-  font-family: var(--font);
-  font-size: 13px;
-  padding: 9px 10px;
-}
-
-.add-account-block input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-  background: var(--surface);
+#sidebar-add-account .segmented-block {
+  margin-bottom: 12px;
 }
 
 .add-row {
@@ -267,6 +201,20 @@ body {
 
 .add-row input {
   flex: 1;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 9px 10px;
+}
+
+.add-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: var(--surface);
 }
 
 .btn-icon {
@@ -525,24 +473,94 @@ body {
   display: none;
 }
 
-/* --- signal strip (per-account pulse trace) ----------------------------- */
+/* --- level 0: modèles ---------------------------------------------------- */
 
-.dashboard-pulse {
-  margin-bottom: 24px;
+.models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
 }
 
-.signal-strip {
+.model-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.model-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.model-card:focus-visible,
+.account-card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.model-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 6px 0;
+}
+
+.model-card-stat {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+/* --- breadcrumb ------------------------------------------------------------ */
+
+.breadcrumb-back {
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 6px;
+  display: inline-block;
+}
+
+.breadcrumb-back:hover {
+  color: var(--accent);
+}
+
+/* --- level 1: comptes d'une modèle (pulse trace cliquable) --------------- */
+
+.account-cards {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.signal-row {
+.account-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-card);
   padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.account-card:hover {
+  border-color: var(--accent);
+}
+
+.account-card-delete {
+  position: relative;
+  z-index: 1;
 }
 
 .signal-row-head {
@@ -649,14 +667,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.standalone-head {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  padding: 0;
   margin-bottom: 14px;
 }
 

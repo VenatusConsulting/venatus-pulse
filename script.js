@@ -2,14 +2,13 @@ const STORAGE_ACCOUNTS = "signal_accounts";
 const STORAGE_ENTRIES = "signal_entries";
 const STORAGE_CONVERSIONS = "signal_conversions";
 const STORAGE_TAG_VOCAB = "signal_tag_vocab";
+const STORAGE_MODELS = "signal_models";
 
-// one color per channel — reused consistently across chips, pulse traces and charts.
+// one color per channel — reused consistently across account cards, pulse traces and charts.
 // fixed CVD-safe order (never cycled/reassigned) — see dataviz skill's validated palette.
 const CHANNEL_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
 
 const CATEGORY_LABELS = { trafic: "Trafic", creatrice: "Créatrice" };
-
-const TAB_TITLES = { dashboard: "Dashboard", insights: "Insights", conversion: "Conversion", journal: "Journal" };
 
 // Chart.js chrome shared across every chart (light surface tokens)
 const CHART_INK = "#6b7280";
@@ -112,19 +111,33 @@ function saveTagVocab(vocab) {
   localStorage.setItem(STORAGE_TAG_VOCAB, JSON.stringify(vocab));
 }
 
+function loadModels() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_MODELS)) || [];
+    return raw.map((m) => (typeof m === "string" ? m.trim() : "")).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+function saveModels(models) {
+  localStorage.setItem(STORAGE_MODELS, JSON.stringify(models));
+}
+
 let accounts = loadAccounts();
 let entries = loadEntries();
 let conversions = loadConversions();
 let tagVocab = loadTagVocab();
+let models = loadModels();
 
 let trendChart = null;
 let insightsCharts = {}; // { hook: Chart, format: Chart, ... }
 let conversionViewsChart = null;
 let conversionMetricsChart = null;
 
-// shared filter driving account chips, Pouls, stat bar and Insights
-let globalCategoryFilter = "all";
-let globalNicheFilter = "all";
+// navigation state — Modèles (level 0) -> Modèle (level 1) -> Compte (level 2)
+let currentView = "models"; // "models" | "model" | "account"
+let currentNiche = null;
+let currentAccountId = null;
 
 // which category will be assigned to the next account created
 let newAccountCategory = "trafic";
@@ -133,7 +146,7 @@ let newAccountCategory = "trafic";
 let insightsMetric = "views"; // "views" | "engagement"
 let insightsSort = "views"; // "views" | "engagement"
 
-// active main-canvas tab
+// active tab within the account view
 let activeTab = "dashboard";
 
 function uid() {
@@ -145,20 +158,14 @@ function accountName(id) {
   return acc ? acc.name : "?";
 }
 
+// scoped within the account's own model, not the global account list, so a
+// small handful of colors stays stable and distinguishable per model
 function channelColor(accountId) {
-  const idx = accounts.findIndex((a) => a.id === accountId);
+  const acc = accounts.find((a) => a.id === accountId);
+  if (!acc) return CHANNEL_COLORS[0];
+  const siblings = accountsForNiche(acc.niche);
+  const idx = siblings.findIndex((a) => a.id === accountId);
   return CHANNEL_COLORS[(idx < 0 ? 0 : idx) % CHANNEL_COLORS.length];
-}
-
-function accountsInScope() {
-  return accounts
-    .filter((a) => globalCategoryFilter === "all" || a.category === globalCategoryFilter)
-    .filter((a) => globalNicheFilter === "all" || a.niche === globalNicheFilter);
-}
-
-function entriesInScope() {
-  const scopedIds = new Set(accountsInScope().map((a) => a.id));
-  return entries.filter((e) => scopedIds.has(e.accountId));
 }
 
 function escapeHtml(str) {
@@ -198,12 +205,37 @@ function tagChipsHtml(tags) {
   return `<div class="tag-chip-row">${chips.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}</div>`;
 }
 
-function nicheOptions() {
-  const set = new Set();
-  accounts.forEach((a) => {
-    if (a.niche && a.niche.trim()) set.add(a.niche.trim());
+// --- model / account scoping ---------------------------------------------
+
+function allModelNames() {
+  const seen = new Map(); // lowercase -> valeur affichée (première rencontrée)
+  models.forEach((m) => {
+    const k = m.toLowerCase();
+    if (!seen.has(k)) seen.set(k, m);
   });
-  return [...set].sort((a, b) => a.localeCompare(b, "fr"));
+  accounts.forEach((a) => {
+    const n = (a.niche || "").trim();
+    if (n) {
+      const k = n.toLowerCase();
+      if (!seen.has(k)) seen.set(k, n);
+    }
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+function resolveNicheCasing(niche) {
+  const found = allModelNames().find((m) => m.toLowerCase() === niche.trim().toLowerCase());
+  return found || niche.trim();
+}
+
+function accountsForNiche(niche) {
+  if (!niche) return accounts.filter((a) => !a.niche || !a.niche.trim());
+  const target = niche.trim().toLowerCase();
+  return accounts.filter((a) => (a.niche || "").trim().toLowerCase() === target);
+}
+
+function entriesForAccount(accountId) {
+  return entries.filter((e) => e.accountId === accountId);
 }
 
 // --- tag vocabulary (predefined + custom, persisted) ---------------------
@@ -247,7 +279,7 @@ function upsertConversion(accountId, date, linkClicks, newSubs, revenue) {
   saveConversions(conversions);
 }
 
-// --- segmented controls (category filter + new-account category picker) ---
+// --- segmented controls ---------------------------------------------------
 
 function setupSegmented(containerId, onSelect) {
   const container = document.getElementById(containerId);
@@ -261,173 +293,268 @@ function setupSegmented(containerId, onSelect) {
   });
 }
 
-// --- tabs -----------------------------------------------------------------
+// --- scoped stats (models overview / one model / one account) ------------
 
-function renderActiveTab() {
-  document.getElementById("page-title").textContent = TAB_TITLES[activeTab] || "Dashboard";
-  if (activeTab === "dashboard") renderTrendChart();
-  if (activeTab === "insights") renderInsights();
-  if (activeTab === "conversion") {
-    renderConversionViewsChart();
-    renderConversionMetricsChart();
-    renderConversionLogTable();
-  }
-  if (activeTab === "journal") renderLogTable();
+function computeStatsForEntries(entriesList) {
+  const totalViews = entriesList.reduce((s, e) => s + Number(e.views || 0), 0);
+  const avgEngagement = entriesList.length ? entriesList.reduce((s, e) => s + engagementRate(e), 0) / entriesList.length : 0;
+  let bestEntry = null;
+  entriesList.forEach((e) => {
+    if (!bestEntry || Number(e.views || 0) > Number(bestEntry.views || 0)) bestEntry = e;
+  });
+  return { totalViews, avgEngagement, bestEntryLabel: bestEntry ? entryLabel(bestEntry) : "—" };
 }
 
-function switchTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.tab === tab);
-  });
-  document.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.hidden = panel.dataset.tabPanel !== tab;
-  });
-  // re-render now that the panel is visible, so Chart.js sizes against real dimensions
-  renderActiveTab();
-}
+function computeModelStats(niche) {
+  const accs = accountsForNiche(niche);
+  const accIds = new Set(accs.map((a) => a.id));
+  const entriesList = entries.filter((e) => accIds.has(e.accountId));
+  const base = computeStatsForEntries(entriesList);
 
-// --- global stat bar -------------------------------------------------------
-
-function computeGlobalStats() {
-  const filtered = entriesInScope();
-  const totalViews = filtered.reduce((sum, e) => sum + Number(e.views || 0), 0);
-  const avgEngagement = filtered.length ? filtered.reduce((sum, e) => sum + engagementRate(e), 0) / filtered.length : 0;
-
-  const nicheGroups = {};
   const accountGroups = {};
-  filtered.forEach((e) => {
-    const acc = accounts.find((a) => a.id === e.accountId);
-    const views = Number(e.views || 0);
-    if (acc && acc.niche) {
-      if (!nicheGroups[acc.niche]) nicheGroups[acc.niche] = { total: 0, count: 0 };
-      nicheGroups[acc.niche].total += views;
-      nicheGroups[acc.niche].count += 1;
-    }
+  entriesList.forEach((e) => {
     if (!accountGroups[e.accountId]) accountGroups[e.accountId] = { total: 0, count: 0 };
-    accountGroups[e.accountId].total += views;
+    accountGroups[e.accountId].total += Number(e.views || 0);
     accountGroups[e.accountId].count += 1;
   });
-
-  let bestNiche = "—";
-  let bestNicheAvg = -1;
-  Object.entries(nicheGroups).forEach(([niche, g]) => {
-    const avg = g.total / g.count;
-    if (avg > bestNicheAvg) {
-      bestNicheAvg = avg;
-      bestNiche = niche;
-    }
-  });
-
   let bestAccountName = "—";
-  let bestAccountAvg = -1;
-  Object.entries(accountGroups).forEach(([accId, g]) => {
+  let bestAvg = -1;
+  Object.entries(accountGroups).forEach(([id, g]) => {
     const avg = g.total / g.count;
-    if (avg > bestAccountAvg) {
-      bestAccountAvg = avg;
-      bestAccountName = accountName(accId);
+    if (avg > bestAvg) {
+      bestAvg = avg;
+      bestAccountName = accountName(id);
     }
   });
 
-  return { totalViews, avgEngagement, bestNiche, bestAccountName };
+  return { ...base, bestAccountName };
 }
 
-function renderStatBar() {
-  const stats = computeGlobalStats();
-  document.getElementById("stat-total-views").textContent = formatCompact(stats.totalViews);
-  document.getElementById("stat-avg-engagement").textContent = formatPercent(stats.avgEngagement);
-  document.getElementById("stat-best-niche").textContent = stats.bestNiche;
-  document.getElementById("stat-best-account").textContent = stats.bestAccountName;
+function computeAccountStats(accountId) {
+  const entriesList = entriesForAccount(accountId);
+  const base = computeStatsForEntries(entriesList);
+  const totalNewSubs = conversions.filter((c) => c.accountId === accountId).reduce((s, c) => s + Number(c.newSubs || 0), 0);
+  return { ...base, totalNewSubs };
 }
 
-// --- account management ----------------------------------------------
+function setStatSlot(slot, label, value) {
+  document.getElementById(`stat-label-${slot}`).textContent = label;
+  document.getElementById(`stat-value-${slot}`).textContent = value;
+}
 
-function renderAccountChips() {
-  const wrap = document.getElementById("account-chips");
+// --- navigation ------------------------------------------------------------
+
+function goToModels() {
+  currentView = "models";
+  currentNiche = null;
+  currentAccountId = null;
+  renderCurrentView();
+}
+
+function goToModel(niche) {
+  currentView = "model";
+  currentNiche = niche === "" ? "" : resolveNicheCasing(niche);
+  currentAccountId = null;
+  renderCurrentView();
+}
+
+function goToAccount(accountId) {
+  const acc = accounts.find((a) => a.id === accountId);
+  if (!acc) return;
+  currentView = "account";
+  currentAccountId = accountId;
+  currentNiche = acc.niche || "";
+  activeTab = "dashboard";
+  renderCurrentView();
+}
+
+function renderCurrentView() {
+  document.getElementById("view-models").hidden = currentView !== "models";
+  document.getElementById("scoped-header").hidden = currentView === "models";
+  document.getElementById("view-model").hidden = currentView !== "model";
+  document.getElementById("view-account").hidden = currentView !== "account";
+
+  document.getElementById("sidebar-add-account").hidden = currentView !== "model";
+  document.getElementById("sidebar-new-entry").hidden = currentView !== "account";
+
+  if (currentView === "models") renderModelsView();
+  else if (currentView === "model") renderModelView();
+  else if (currentView === "account") renderAccountView();
+}
+
+// --- level 0 : Modèles ------------------------------------------------------
+
+function renderModelsView() {
+  const totalAccounts = accounts.length;
+  const totalEntries = entries.length;
+  document.getElementById("models-summary").textContent =
+    totalAccounts > 0
+      ? `${totalAccounts} compte${totalAccounts > 1 ? "s" : ""} · ${totalEntries} entrée${totalEntries > 1 ? "s" : ""} au total`
+      : "Ajoute ta première modèle pour démarrer le suivi.";
+
+  const grid = document.getElementById("models-grid");
+  grid.innerHTML = "";
+
+  const names = allModelNames();
+  const hasOrphans = accounts.some((a) => !a.niche || !a.niche.trim());
+
+  if (names.length === 0 && !hasOrphans) {
+    grid.innerHTML = '<p class="empty-hint">Aucune modèle pour l\'instant. Clique sur "+ Nouvelle modèle" pour commencer.</p>';
+    return;
+  }
+
+  names.forEach((niche) => grid.appendChild(buildModelCard(niche, niche)));
+  if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
+}
+
+function buildModelCard(niche, displayName) {
+  const accs = accountsForNiche(niche);
+  const accIds = new Set(accs.map((a) => a.id));
+  const entriesList = entries.filter((e) => accIds.has(e.accountId));
+  const totalViews = entriesList.reduce((s, e) => s + Number(e.views || 0), 0);
+
+  const card = document.createElement("div");
+  card.className = "model-card";
+  card.dataset.modelId = niche;
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.innerHTML = `
+    <h2 class="model-card-name">${escapeHtml(displayName)}</h2>
+    <p class="model-card-stat">${accs.length} compte${accs.length > 1 ? "s" : ""} · ${formatCompact(totalViews)} vues</p>
+  `;
+  return card;
+}
+
+// --- level 1 : Modèle (tous ses comptes) -----------------------------------
+
+function renderModelView() {
+  const niche = currentNiche;
+  const displayName = niche === "" ? "Sans modèle" : niche;
+
+  document.getElementById("scoped-title").textContent = displayName;
+  document.getElementById("scoped-subtitle").textContent = "";
+  const breadcrumb = document.getElementById("breadcrumb-btn");
+  breadcrumb.textContent = "← Modèles";
+  breadcrumb.onclick = () => goToModels();
+
+  const stats = computeModelStats(niche);
+  setStatSlot("a", "Vues totales", formatCompact(stats.totalViews));
+  setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
+  setStatSlot("c", "Meilleur compte", stats.bestAccountName);
+  setStatSlot("d", "Meilleur reel", stats.bestEntryLabel);
+
+  renderModelAccountCards(niche);
+}
+
+function renderModelAccountCards(niche) {
+  const wrap = document.getElementById("model-accounts");
   wrap.innerHTML = "";
+  const accs = accountsForNiche(niche);
 
-  if (accounts.length === 0) {
-    const p = document.createElement("span");
-    p.className = "empty-hint";
-    p.textContent = "Aucun canal actif. Ajoute un compte ci-dessous.";
-    wrap.appendChild(p);
+  if (accs.length === 0) {
+    wrap.innerHTML = '<p class="empty-hint">Aucun compte pour cette modèle. Ajoute-en un dans la barre latérale.</p>';
     return;
   }
 
-  const visible = accountsInScope();
-  if (visible.length === 0) {
-    const p = document.createElement("span");
-    p.className = "empty-hint";
-    p.textContent = "Aucun compte dans ce filtre.";
-    wrap.appendChild(p);
-    return;
-  }
+  accs.forEach((acc) => {
+    const color = channelColor(acc.id);
+    const accEntries = entriesForAccount(acc.id).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  visible.forEach((acc) => {
-    const chip = document.createElement("span");
-    chip.className = "account-chip";
+    const card = document.createElement("div");
+    card.className = "account-card";
+    card.dataset.accountId = acc.id;
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+
+    const head = document.createElement("div");
+    head.className = "signal-row-head";
     const dot = document.createElement("span");
-    dot.className = "chip-dot";
-    dot.style.background = channelColor(acc.id);
-    const label = document.createElement("span");
-    label.textContent = acc.name;
+    dot.className = "signal-row-dot";
+    dot.style.background = color;
+    const name = document.createElement("span");
+    name.className = "signal-row-name";
+    name.textContent = acc.name;
     const badge = document.createElement("span");
     badge.className = `cat-badge cat-${acc.category}`;
     badge.textContent = CATEGORY_LABELS[acc.category];
-    const parts = [dot, label, badge];
-    if (acc.niche) {
-      const niche = document.createElement("span");
-      niche.className = "chip-niche";
-      niche.textContent = acc.niche;
-      parts.push(niche);
+    const stat = document.createElement("span");
+    stat.className = "signal-row-stat";
+    if (accEntries.length > 0) {
+      const total = accEntries.reduce((sum, e) => sum + Number(e.views || 0), 0);
+      const avg = Math.round(total / accEntries.length);
+      stat.textContent = `${accEntries.length} reels · moy. ${avg.toLocaleString("fr-FR")} vues`;
+    } else {
+      stat.textContent = "aucune entrée";
     }
     const del = document.createElement("button");
+    del.className = "row-delete account-card-delete";
     del.textContent = "✕";
-    del.title = "Supprimer ce compte (garde ses entrées dans le journal)";
-    del.addEventListener("click", () => {
-      accounts = accounts.filter((a) => a.id !== acc.id);
-      saveAccounts(accounts);
-      renderAll();
-    });
-    chip.append(...parts, del);
-    wrap.appendChild(chip);
+    del.title = "Supprimer ce compte";
+    head.append(dot, name, badge, stat, del);
+    card.appendChild(head);
+
+    const canvasWrap = document.createElement("div");
+    canvasWrap.className = "signal-row-canvas";
+    canvasWrap.innerHTML = buildPulseTrace(accEntries, color);
+    if (accEntries.length === 0) {
+      const empty = document.createElement("span");
+      empty.className = "signal-row-empty-label";
+      empty.textContent = "Pas encore de signal pour ce compte.";
+      canvasWrap.appendChild(empty);
+    }
+    card.appendChild(canvasWrap);
+
+    wrap.appendChild(card);
   });
 }
 
-function populateAccountSelects() {
-  const entrySelect = document.getElementById("entry-account");
-  const trendFilter = document.getElementById("trend-account-filter");
-  const logFilter = document.getElementById("log-account-filter");
-  const conversionFormAccount = document.getElementById("conversion-form-account");
-  const conversionFilter = document.getElementById("conversion-account-filter");
+function deleteAccount(accountId) {
+  const acc = accounts.find((a) => a.id === accountId);
+  if (!acc) return;
+  const entryCount = entries.filter((e) => e.accountId === accountId).length;
+  const conversionCount = conversions.filter((c) => c.accountId === accountId).length;
+  const ok = confirm(
+    `Supprimer "${acc.name}" ? Cela supprime aussi ses ${entryCount} entrée${entryCount > 1 ? "s" : ""} et ${conversionCount} conversion${conversionCount > 1 ? "s" : ""}. Action irréversible.`
+  );
+  if (!ok) return;
 
-  const prevEntry = entrySelect.value;
-  const prevTrend = trendFilter.value;
-  const prevLog = logFilter.value;
-  const prevConversionForm = conversionFormAccount.value;
-  const prevConversionFilter = conversionFilter.value;
+  entries = entries.filter((e) => e.accountId !== accountId);
+  conversions = conversions.filter((c) => c.accountId !== accountId);
+  accounts = accounts.filter((a) => a.id !== accountId);
+  saveEntries(entries);
+  saveConversions(conversions);
+  saveAccounts(accounts);
 
-  entrySelect.innerHTML = "";
-  trendFilter.innerHTML = '<option value="all">Tous les comptes</option>';
-  logFilter.innerHTML = '<option value="all">Tous les comptes</option>';
-  conversionFormAccount.innerHTML = "";
-  conversionFilter.innerHTML = '<option value="all">Tous les comptes</option>';
+  if (currentAccountId === accountId) goToModel(currentNiche);
+  else renderCurrentView();
+}
 
-  // these selectors always list every account, regardless of the sidebar/global filter
-  accounts.forEach((acc) => {
-    [entrySelect, trendFilter, logFilter, conversionFormAccount, conversionFilter].forEach((select) => {
-      const opt = document.createElement("option");
-      opt.value = acc.id;
-      opt.textContent = acc.name;
-      select.appendChild(opt);
-    });
-  });
+// --- level 2 : Compte (dashboard complet) -----------------------------------
 
-  if ([...entrySelect.options].some((o) => o.value === prevEntry)) entrySelect.value = prevEntry;
-  if ([...trendFilter.options].some((o) => o.value === prevTrend)) trendFilter.value = prevTrend;
-  if ([...logFilter.options].some((o) => o.value === prevLog)) logFilter.value = prevLog;
-  if ([...conversionFormAccount.options].some((o) => o.value === prevConversionForm)) conversionFormAccount.value = prevConversionForm;
-  if ([...conversionFilter.options].some((o) => o.value === prevConversionFilter)) conversionFilter.value = prevConversionFilter;
+function renderAccountView() {
+  const acc = accounts.find((a) => a.id === currentAccountId);
+  if (!acc) {
+    goToModels();
+    return;
+  }
+
+  document.getElementById("scoped-title").textContent = acc.name;
+  document.getElementById("scoped-subtitle").innerHTML = `<span class="cat-badge cat-${acc.category}">${escapeHtml(
+    CATEGORY_LABELS[acc.category]
+  )}</span>`;
+  const breadcrumb = document.getElementById("breadcrumb-btn");
+  const displayNiche = acc.niche || "Sans modèle";
+  breadcrumb.textContent = `← ${displayNiche}`;
+  breadcrumb.onclick = () => goToModel(acc.niche || "");
+
+  const stats = computeAccountStats(currentAccountId);
+  setStatSlot("a", "Vues totales", formatCompact(stats.totalViews));
+  setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
+  setStatSlot("c", "Meilleur reel", stats.bestEntryLabel);
+  setStatSlot("d", "Nouveaux abonnés", stats.totalNewSubs.toLocaleString("fr-FR"));
+
+  populateTagSelects();
+  renderActiveTab();
 }
 
 function populateTagSelects() {
@@ -446,26 +573,6 @@ function populateTagSelects() {
   });
 }
 
-function populateNicheFilter() {
-  const select = document.getElementById("global-niche-filter");
-  const datalist = document.getElementById("niche-suggestions");
-  const prev = select.value;
-  select.innerHTML = '<option value="all">Toutes les niches</option>';
-  datalist.innerHTML = "";
-  nicheOptions().forEach((n) => {
-    const opt = document.createElement("option");
-    opt.value = n;
-    opt.textContent = n;
-    select.appendChild(opt);
-
-    const dOpt = document.createElement("option");
-    dOpt.value = n;
-    datalist.appendChild(dOpt);
-  });
-  if ([...select.options].some((o) => o.value === prev)) select.value = prev;
-  else globalNicheFilter = select.value;
-}
-
 function wireTagAddButtons() {
   document.querySelectorAll(".tag-add-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -482,25 +589,31 @@ function wireTagAddButtons() {
   });
 }
 
-// --- console readout ---------------------------------------------------
+// --- tabs (within a single account's dashboard) ----------------------------
 
-function updateConsoleReadout() {
-  const el = document.getElementById("console-readout");
-  if (accounts.length === 0) {
-    el.textContent = "Aucun compte — ajoute-en un pour démarrer le suivi";
-    return;
+function renderActiveTab() {
+  if (activeTab === "dashboard") renderTrendChart();
+  if (activeTab === "insights") renderInsights();
+  if (activeTab === "conversion") {
+    renderConversionViewsChart();
+    renderConversionMetricsChart();
+    renderConversionLogTable();
   }
-  const chanLabel = accounts.length > 1 ? "comptes actifs" : "compte actif";
-  const entryLabelText = entries.length > 1 ? "entrées" : "entrée";
-  let lastLabel = "aucun signal";
-  if (entries.length > 0) {
-    const lastDate = entries.map((e) => e.date).sort().slice(-1)[0];
-    lastLabel = "dernière entrée le " + lastDate;
-  }
-  el.textContent = `${accounts.length} ${chanLabel} · ${entries.length} ${entryLabelText} · ${lastLabel}`;
+  if (activeTab === "journal") renderLogTable();
 }
 
-// --- signal strip (per-account pulse trace) ---
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.tab === tab);
+  });
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
+    panel.hidden = panel.dataset.tabPanel !== tab;
+  });
+  renderActiveTab();
+}
+
+// --- pulse trace (reused for account cards at level 1) ----------------------
 
 function buildPulseTrace(accEntries, color) {
   const W = 600;
@@ -555,138 +668,39 @@ function buildPulseTrace(accEntries, color) {
   </svg>`;
 }
 
-function renderSignalStrip() {
-  const wrap = document.getElementById("signal-strip");
-  wrap.innerHTML = "";
-
-  if (accounts.length === 0) {
-    wrap.innerHTML = '<p class="empty-hint">Ajoute un compte pour voir son activité ici.</p>';
-    return;
-  }
-
-  const visible = accountsInScope();
-  if (visible.length === 0) {
-    wrap.innerHTML = '<p class="empty-hint">Aucun compte dans ce filtre.</p>';
-    return;
-  }
-
-  visible.forEach((acc) => {
-    const color = channelColor(acc.id);
-    const accEntries = entries.filter((e) => e.accountId === acc.id).sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const row = document.createElement("div");
-    row.className = "signal-row";
-
-    const head = document.createElement("div");
-    head.className = "signal-row-head";
-    const dot = document.createElement("span");
-    dot.className = "signal-row-dot";
-    dot.style.background = color;
-    const name = document.createElement("span");
-    name.className = "signal-row-name";
-    name.textContent = acc.name;
-    const badge = document.createElement("span");
-    badge.className = `cat-badge cat-${acc.category}`;
-    badge.textContent = CATEGORY_LABELS[acc.category];
-    const headParts = [dot, name, badge];
-    if (acc.niche) {
-      const niche = document.createElement("span");
-      niche.className = "chip-niche";
-      niche.textContent = acc.niche;
-      headParts.push(niche);
-    }
-    const stat = document.createElement("span");
-    stat.className = "signal-row-stat";
-    if (accEntries.length > 0) {
-      const total = accEntries.reduce((sum, e) => sum + Number(e.views || 0), 0);
-      const avg = Math.round(total / accEntries.length);
-      stat.textContent = `${accEntries.length} reels · moy. ${avg.toLocaleString("fr-FR")} vues`;
-    } else {
-      stat.textContent = "aucune entrée";
-    }
-    headParts.push(stat);
-    head.append(...headParts);
-    row.appendChild(head);
-
-    const canvasWrap = document.createElement("div");
-    canvasWrap.className = "signal-row-canvas";
-    canvasWrap.innerHTML = buildPulseTrace(accEntries, color);
-    if (accEntries.length === 0) {
-      const empty = document.createElement("span");
-      empty.className = "signal-row-empty-label";
-      empty.textContent = "Pas encore de signal pour ce compte.";
-      canvasWrap.appendChild(empty);
-    }
-    row.appendChild(canvasWrap);
-
-    wrap.appendChild(row);
-  });
-}
-
-// --- dashboard trend chart -----------------------------------------------
+// --- dashboard tab: trend chart (single account) ----------------------------
 
 function renderTrendChart() {
-  const filter = document.getElementById("trend-account-filter").value;
   const canvas = document.getElementById("trend-chart");
-
-  const relevantEntries = filter === "all" ? entries : entries.filter((e) => e.accountId === filter);
-  const uniqueDates = [...new Set(relevantEntries.map((e) => e.date))].sort();
-
-  let datasets = [];
-  if (filter === "all") {
-    datasets = accounts.map((acc) => {
-      const byDate = {};
-      entries
-        .filter((e) => e.accountId === acc.id)
-        .forEach((e) => {
-          byDate[e.date] = Number(e.views || 0);
-        });
-      const color = channelColor(acc.id);
-      return {
-        label: acc.name,
-        data: uniqueDates.map((d) => (byDate[d] !== undefined ? byDate[d] : null)),
-        borderColor: color,
-        backgroundColor: color,
-        borderWidth: 2,
-        tension: 0.3,
-        pointRadius: 4,
-        spanGaps: true,
-      };
-    });
-  } else {
-    const byDate = {};
-    entries
-      .filter((e) => e.accountId === filter)
-      .forEach((e) => {
-        byDate[e.date] = Number(e.views || 0);
-      });
-    const color = channelColor(filter);
-    datasets = [
-      {
-        label: accountName(filter),
-        data: uniqueDates.map((d) => byDate[d]),
-        borderColor: color,
-        backgroundColor: color,
-        borderWidth: 2,
-        tension: 0.3,
-        pointRadius: 4,
-      },
-    ];
-  }
+  const accEntries = entriesForAccount(currentAccountId).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const uniqueDates = [...new Set(accEntries.map((e) => e.date))].sort();
+  const byDate = {};
+  accEntries.forEach((e) => {
+    byDate[e.date] = Number(e.views || 0);
+  });
+  const color = channelColor(currentAccountId);
 
   if (trendChart) trendChart.destroy();
   trendChart = new Chart(canvas, {
     type: "line",
-    data: { labels: uniqueDates, datasets },
+    data: {
+      labels: uniqueDates,
+      datasets: [
+        {
+          label: accountName(currentAccountId),
+          data: uniqueDates.map((d) => byDate[d]),
+          borderColor: color,
+          backgroundColor: color,
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 4,
+        },
+      ],
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: filter === "all",
-          labels: { color: CHART_LEGEND, boxWidth: 10, font: { size: 11 } },
-        },
-      },
+      plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
         y: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
@@ -695,16 +709,16 @@ function renderTrendChart() {
   });
 }
 
-// --- log table ----------------------------------------------------------
+// --- journal tab (single account) -------------------------------------------
 
 function renderLogTable() {
-  const filter = document.getElementById("log-account-filter").value;
   const body = document.getElementById("log-body");
   const emptyMsg = document.getElementById("log-empty");
   body.innerHTML = "";
 
-  let filtered = filter === "all" ? entries.slice() : entries.filter((e) => e.accountId === filter);
-  filtered = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const filtered = entriesForAccount(currentAccountId)
+    .slice()
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   if (filtered.length === 0) {
     emptyMsg.style.display = "block";
@@ -712,18 +726,13 @@ function renderLogTable() {
   }
   emptyMsg.style.display = "none";
 
-  const maxByAccount = {};
-  entries.forEach((e) => {
-    const v = Number(e.views || 0);
-    if (!maxByAccount[e.accountId] || v > maxByAccount[e.accountId]) maxByAccount[e.accountId] = v;
-  });
+  const maxViews = Math.max(...filtered.map((e) => Number(e.views || 0)), 0);
 
   filtered.forEach((e) => {
     const tr = document.createElement("tr");
-    const isPeak = Number(e.views || 0) === maxByAccount[e.accountId] && Number(e.views || 0) > 0;
+    const isPeak = maxViews > 0 && Number(e.views || 0) === maxViews;
     tr.innerHTML = `
       <td>${escapeHtml(e.date)}</td>
-      <td>${escapeHtml(accountName(e.accountId))}</td>
       <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
@@ -739,7 +748,7 @@ function renderLogTable() {
     delBtn.addEventListener("click", () => {
       entries = entries.filter((x) => x.id !== e.id);
       saveEntries(entries);
-      renderAll();
+      renderCurrentView();
     });
     delTd.appendChild(delBtn);
     tr.appendChild(delTd);
@@ -747,7 +756,7 @@ function renderLogTable() {
   });
 }
 
-// --- insights (structured tags -> what works) ---------------------------
+// --- insights tab (single account) ------------------------------------------
 
 function computeAxisBreakdown(axis, filteredEntries) {
   const groups = {};
@@ -821,13 +830,10 @@ function renderInsightsLeaderboard(filteredEntries) {
   emptyMsg.style.display = "none";
 
   sorted.forEach((e, i) => {
-    const acc = accounts.find((a) => a.id === e.accountId);
     const tr = document.createElement("tr");
-    const rankClass = i === 0 ? "rank-badge rank-1" : i === 1 ? "rank-badge rank-2" : i === 2 ? "rank-badge rank-3" : "";
+    const rankClass = i === 0 ? "rank-badge rank-1" : "";
     tr.innerHTML = `
       <td class="${rankClass}">${i + 1}</td>
-      <td>${escapeHtml(acc ? acc.name : "?")}</td>
-      <td>${escapeHtml((acc && acc.niche) || "—")}</td>
       <td>${escapeHtml(e.date)}</td>
       <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}</td>
       <td>${Number(e.views || 0).toLocaleString("fr-FR")}</td>
@@ -838,7 +844,7 @@ function renderInsightsLeaderboard(filteredEntries) {
 }
 
 function renderInsights() {
-  const filtered = entriesInScope();
+  const filtered = entriesForAccount(currentAccountId);
   const emptyMsg = document.getElementById("insights-empty");
   const grid = document.getElementById("insights-grid");
 
@@ -860,37 +866,36 @@ function renderInsights() {
   renderInsightsLeaderboard(filtered);
 }
 
-// --- conversion (daily clicks / new subs vs content activity) ----------
+// --- conversion tab (single account) ----------------------------------------
 
-function computeDailyContentViews(scope) {
-  const relevant = scope === "all" ? entries : entries.filter((e) => e.accountId === scope);
+function computeDailyContentViews(accountId) {
   const byDate = {};
-  relevant.forEach((e) => {
+  entriesForAccount(accountId).forEach((e) => {
     byDate[e.date] = (byDate[e.date] || 0) + Number(e.views || 0);
   });
   return byDate;
 }
 
-function computeDailyConversions(scope) {
-  const relevant = scope === "all" ? conversions : conversions.filter((c) => c.accountId === scope);
+function computeDailyConversions(accountId) {
   const byDate = {};
-  relevant.forEach((c) => {
-    if (!byDate[c.date]) byDate[c.date] = { linkClicks: 0, newSubs: 0, revenue: 0 };
-    byDate[c.date].linkClicks += Number(c.linkClicks || 0);
-    byDate[c.date].newSubs += Number(c.newSubs || 0);
-    byDate[c.date].revenue += Number(c.revenue || 0);
-  });
+  conversions
+    .filter((c) => c.accountId === accountId)
+    .forEach((c) => {
+      if (!byDate[c.date]) byDate[c.date] = { linkClicks: 0, newSubs: 0, revenue: 0 };
+      byDate[c.date].linkClicks += Number(c.linkClicks || 0);
+      byDate[c.date].newSubs += Number(c.newSubs || 0);
+      byDate[c.date].revenue += Number(c.revenue || 0);
+    });
   return byDate;
 }
 
 // two small multiples instead of one dual-axis chart: views and conversion counts
 // live on very different scales, and a shared y-axis would misrepresent one of them.
 function renderConversionViewsChart() {
-  const filter = document.getElementById("conversion-account-filter").value;
   const canvas = document.getElementById("conversion-views-chart");
   const emptyMsg = document.getElementById("conversion-views-empty");
 
-  const viewsByDate = computeDailyContentViews(filter);
+  const viewsByDate = computeDailyContentViews(currentAccountId);
   const dates = Object.keys(viewsByDate).sort();
 
   if (dates.length === 0) {
@@ -935,11 +940,10 @@ function renderConversionViewsChart() {
 }
 
 function renderConversionMetricsChart() {
-  const filter = document.getElementById("conversion-account-filter").value;
   const canvas = document.getElementById("conversion-metrics-chart");
   const emptyMsg = document.getElementById("conversion-metrics-empty");
 
-  const convByDate = computeDailyConversions(filter);
+  const convByDate = computeDailyConversions(currentAccountId);
   const dates = Object.keys(convByDate).sort();
 
   if (dates.length === 0) {
@@ -991,13 +995,14 @@ function renderConversionMetricsChart() {
 }
 
 function renderConversionLogTable() {
-  const filter = document.getElementById("conversion-account-filter").value;
   const body = document.getElementById("conversion-log-body");
   const emptyMsg = document.getElementById("conversion-log-empty");
   body.innerHTML = "";
 
-  let filtered = filter === "all" ? conversions.slice() : conversions.filter((c) => c.accountId === filter);
-  filtered = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const filtered = conversions
+    .filter((c) => c.accountId === currentAccountId)
+    .slice()
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   if (filtered.length === 0) {
     emptyMsg.style.display = "block";
@@ -1009,7 +1014,6 @@ function renderConversionLogTable() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(c.date)}</td>
-      <td>${escapeHtml(accountName(c.accountId))}</td>
       <td>${Number(c.linkClicks || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(c.newSubs || 0).toLocaleString("fr-FR")}</td>
       <td>${c.revenue ? Number(c.revenue).toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) : "—"}</td>
@@ -1022,7 +1026,7 @@ function renderConversionLogTable() {
     delBtn.addEventListener("click", () => {
       conversions = conversions.filter((x) => x.id !== c.id);
       saveConversions(conversions);
-      renderAll();
+      renderCurrentView();
     });
     delTd.appendChild(delBtn);
     tr.appendChild(delTd);
@@ -1030,37 +1034,51 @@ function renderConversionLogTable() {
   });
 }
 
-// --- boot / render all ---------------------------------------------------
+// --- event wiring ------------------------------------------------------------
 
-function renderAll() {
-  populateTagSelects();
-  renderAccountChips();
-  populateAccountSelects();
-  populateNicheFilter();
-  updateConsoleReadout();
-  renderStatBar();
-  renderSignalStrip();
-  renderActiveTab();
-}
-
-document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+document.getElementById("add-model-btn").addEventListener("click", () => {
+  const name = window.prompt("Nom de la nouvelle modèle :");
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const exists = allModelNames().some((m) => m.toLowerCase() === trimmed.toLowerCase());
+  if (!exists) {
+    models.push(trimmed);
+    saveModels(models);
+  }
+  goToModel(trimmed);
 });
 
-setupSegmented("category-filter", (value) => {
-  globalCategoryFilter = value;
-  renderAccountChips();
-  renderStatBar();
-  renderSignalStrip();
-  renderActiveTab();
+document.getElementById("models-grid").addEventListener("click", (e) => {
+  const card = e.target.closest("[data-model-id]");
+  if (!card) return;
+  goToModel(card.dataset.modelId);
+});
+document.getElementById("models-grid").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest("[data-model-id]");
+  if (!card) return;
+  e.preventDefault();
+  goToModel(card.dataset.modelId);
 });
 
-document.getElementById("global-niche-filter").addEventListener("change", (e) => {
-  globalNicheFilter = e.target.value;
-  renderAccountChips();
-  renderStatBar();
-  renderSignalStrip();
-  renderActiveTab();
+document.getElementById("model-accounts").addEventListener("click", (e) => {
+  const delBtn = e.target.closest(".account-card-delete");
+  if (delBtn) {
+    const card = delBtn.closest("[data-account-id]");
+    if (card) deleteAccount(card.dataset.accountId);
+    return;
+  }
+  const card = e.target.closest("[data-account-id]");
+  if (card) goToAccount(card.dataset.accountId);
+});
+document.getElementById("model-accounts").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  if (e.target.closest(".account-card-delete")) return; // let the button handle its own activation
+  const card = e.target.closest("[data-account-id]");
+  if (!card) return;
+  e.preventDefault();
+  goToAccount(card.dataset.accountId);
 });
 
 setupSegmented("new-account-category", (value) => {
@@ -1077,22 +1095,18 @@ document.getElementById("insights-leaderboard-sort").addEventListener("change", 
   renderInsights();
 });
 
-document.getElementById("conversion-account-filter").addEventListener("change", () => {
-  renderConversionViewsChart();
-  renderConversionMetricsChart();
-  renderConversionLogTable();
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
 document.getElementById("add-account-btn").addEventListener("click", () => {
   const input = document.getElementById("new-account-input");
-  const nicheInput = document.getElementById("new-account-niche");
   const name = input.value.trim();
   if (!name) return;
-  accounts.push({ id: uid(), name, category: newAccountCategory, niche: nicheInput.value.trim() });
+  accounts.push({ id: uid(), name, category: newAccountCategory, niche: currentNiche || "" });
   saveAccounts(accounts);
   input.value = "";
-  nicheInput.value = "";
-  renderAll();
+  renderCurrentView();
 });
 document.getElementById("new-account-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -1103,11 +1117,7 @@ document.getElementById("new-account-input").addEventListener("keydown", (e) => 
 
 document.getElementById("entry-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const accountId = document.getElementById("entry-account").value;
-  if (!accountId) {
-    alert("Ajoute d'abord un compte.");
-    return;
-  }
+  if (!currentAccountId) return;
   const tags = {};
   TAG_AXES.forEach((axis) => {
     const select = document.getElementById(`entry-tag-${axis}`);
@@ -1115,7 +1125,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
   });
   entries.push({
     id: uid(),
-    accountId,
+    accountId: currentAccountId,
     date: document.getElementById("entry-date").value,
     label: document.getElementById("entry-label").value.trim(),
     tags,
@@ -1128,18 +1138,14 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
   saveEntries(entries);
   e.target.reset();
   document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
-  renderAll();
+  renderCurrentView();
 });
 
 document.getElementById("conversion-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const accountId = document.getElementById("conversion-form-account").value;
-  if (!accountId) {
-    alert("Ajoute d'abord un compte.");
-    return;
-  }
+  if (!currentAccountId) return;
   upsertConversion(
-    accountId,
+    currentAccountId,
     document.getElementById("conversion-form-date").value,
     document.getElementById("conversion-form-clicks").value,
     document.getElementById("conversion-form-subs").value,
@@ -1147,14 +1153,11 @@ document.getElementById("conversion-form").addEventListener("submit", (e) => {
   );
   e.target.reset();
   document.getElementById("conversion-form-date").value = new Date().toISOString().slice(0, 10);
-  renderAll();
+  renderCurrentView();
 });
-
-document.getElementById("trend-account-filter").addEventListener("change", renderTrendChart);
-document.getElementById("log-account-filter").addEventListener("change", renderLogTable);
 
 wireTagAddButtons();
 
 document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
 document.getElementById("conversion-form-date").value = new Date().toISOString().slice(0, 10);
-renderAll();
+renderCurrentView();

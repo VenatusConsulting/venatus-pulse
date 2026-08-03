@@ -20,42 +20,21 @@
           <span class="brand-name">Venatus Pulse</span>
         </div>
 
-        <section class="rail-section">
-          <h2>Comptes</h2>
-
-          <div class="segmented segmented-block" id="category-filter">
-            <button type="button" class="segmented-option is-active" data-category="all">Tous</button>
-            <button type="button" class="segmented-option" data-category="trafic">Trafic</button>
+        <section class="rail-section" id="sidebar-add-account" hidden>
+          <h2>Ajouter un compte</h2>
+          <div class="segmented segmented-block" id="new-account-category">
+            <button type="button" class="segmented-option is-active" data-category="trafic">Trafic</button>
             <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
           </div>
-
-          <select id="global-niche-filter" class="niche-filter-select">
-            <option value="all">Toutes les niches</option>
-          </select>
-
-          <div id="account-chips" class="account-chips"></div>
-
-          <div class="add-account-block">
-            <div class="segmented segmented-block" id="new-account-category">
-              <button type="button" class="segmented-option is-active" data-category="trafic">Trafic</button>
-              <button type="button" class="segmented-option" data-category="creatrice">Créatrice</button>
-            </div>
-            <input type="text" id="new-account-niche" list="niche-suggestions" placeholder="Niche / modèle (optionnel)" />
-            <datalist id="niche-suggestions"></datalist>
-            <div class="add-row">
-              <input type="text" id="new-account-input" placeholder="nom_du_compte" />
-              <button id="add-account-btn" class="btn-icon" aria-label="Ajouter un compte">+</button>
-            </div>
+          <div class="add-row">
+            <input type="text" id="new-account-input" placeholder="nom_du_compte" />
+            <button id="add-account-btn" class="btn-icon" aria-label="Ajouter un compte">+</button>
           </div>
         </section>
 
-        <section class="rail-section rail-section-grow">
+        <section class="rail-section rail-section-grow" id="sidebar-new-entry" hidden>
           <h2>Nouvelle entrée</h2>
           <form id="entry-form" class="entry-form">
-            <label>
-              Compte
-              <select id="entry-account" required></select>
-            </label>
             <label>
               Date
               <input type="date" id="entry-date" required />
@@ -131,214 +110,207 @@
       </aside>
 
       <main class="canvas">
-        <div class="page-header">
-          <h1 id="page-title">Dashboard</h1>
-          <p class="page-subtitle" id="console-readout">chargement…</p>
+        <div class="view" id="view-models">
+          <div class="page-header">
+            <h1>Modèles</h1>
+            <p class="page-subtitle" id="models-summary"></p>
+          </div>
+          <button type="button" id="add-model-btn" class="btn-primary">+ Nouvelle modèle</button>
+          <div class="models-grid" id="models-grid"></div>
         </div>
 
-        <div class="stat-bar" id="stat-bar">
-          <div class="stat-card">
-            <span class="stat-label">Vues totales</span>
-            <span class="stat-value" id="stat-total-views">0</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Engagement moyen</span>
-            <span class="stat-value" id="stat-avg-engagement">0%</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Meilleure niche</span>
-            <span class="stat-value stat-value-text" id="stat-best-niche">—</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Meilleur compte</span>
-            <span class="stat-value stat-value-text" id="stat-best-account">—</span>
+        <div class="page-header" id="scoped-header" hidden>
+          <button type="button" class="breadcrumb-back" id="breadcrumb-btn"></button>
+          <h1 id="scoped-title"></h1>
+          <p class="page-subtitle" id="scoped-subtitle"></p>
+          <div class="stat-bar" id="scoped-stat-bar">
+            <div class="stat-card">
+              <span class="stat-label" id="stat-label-a"></span>
+              <span class="stat-value" id="stat-value-a"></span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label" id="stat-label-b"></span>
+              <span class="stat-value" id="stat-value-b"></span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label" id="stat-label-c"></span>
+              <span class="stat-value stat-value-text" id="stat-value-c"></span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label" id="stat-label-d"></span>
+              <span class="stat-value stat-value-text" id="stat-value-d"></span>
+            </div>
           </div>
         </div>
 
-        <nav class="tab-bar" id="tab-bar">
-          <button type="button" class="tab-btn is-active" data-tab="dashboard">Dashboard</button>
-          <button type="button" class="tab-btn" data-tab="insights">Insights</button>
-          <button type="button" class="tab-btn" data-tab="conversion">Conversion</button>
-          <button type="button" class="tab-btn" data-tab="journal">Journal</button>
-        </nav>
+        <div class="view" id="view-model" hidden>
+          <div class="account-cards" id="model-accounts"></div>
+        </div>
 
-        <section class="tab-panel" id="tab-dashboard" data-tab-panel="dashboard">
-          <div class="dashboard-pulse">
-            <h2 class="section-title">Pouls des comptes</h2>
-            <div id="signal-strip" class="signal-strip"></div>
-          </div>
+        <div class="view" id="view-account" hidden>
+          <nav class="tab-bar" id="tab-bar">
+            <button type="button" class="tab-btn is-active" data-tab="dashboard">Dashboard</button>
+            <button type="button" class="tab-btn" data-tab="insights">Insights</button>
+            <button type="button" class="tab-btn" data-tab="conversion">Conversion</button>
+            <button type="button" class="tab-btn" data-tab="journal">Journal</button>
+          </nav>
 
-          <div class="chart-card">
-            <div class="chart-card-head">
+          <section class="tab-panel" id="tab-dashboard" data-tab-panel="dashboard">
+            <div class="chart-card">
               <h2 class="section-title">Tendance dans le temps</h2>
-              <select id="trend-account-filter"></select>
-            </div>
-            <div class="chart-wrap chart-wrap-line">
-              <canvas id="trend-chart"></canvas>
-            </div>
-          </div>
-        </section>
-
-        <section class="tab-panel" id="tab-insights" data-tab-panel="insights" hidden>
-          <div class="insights-head">
-            <h2 class="section-title">Insights — quoi dupliquer</h2>
-            <div class="segmented" id="insights-metric-toggle">
-              <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
-              <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
-            </div>
-          </div>
-
-          <p id="insights-empty" class="empty-hint" style="display: none">Pas encore assez de données pour ce filtre.</p>
-
-          <div class="insights-grid" id="insights-grid">
-            <div class="chart-card chart-card-mini">
-              <h2 class="section-title section-title-sm">Hook</h2>
-              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-hook"></canvas></div>
-            </div>
-            <div class="chart-card chart-card-mini">
-              <h2 class="section-title section-title-sm">Format</h2>
-              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-format"></canvas></div>
-            </div>
-            <div class="chart-card chart-card-mini">
-              <h2 class="section-title section-title-sm">Longueur</h2>
-              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-longueur"></canvas></div>
-            </div>
-            <div class="chart-card chart-card-mini">
-              <h2 class="section-title section-title-sm">CTA</h2>
-              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-cta"></canvas></div>
-            </div>
-            <div class="chart-card chart-card-mini">
-              <h2 class="section-title section-title-sm">Son</h2>
-              <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-son"></canvas></div>
-            </div>
-          </div>
-
-          <div class="table-card">
-            <div class="table-card-head">
-              <h2 class="section-title">Top contenus</h2>
-              <select id="insights-leaderboard-sort">
-                <option value="views">Trier par vues</option>
-                <option value="engagement">Trier par engagement</option>
-              </select>
-            </div>
-            <div class="table-wrap">
-              <table id="insights-leaderboard-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Compte</th>
-                    <th>Niche</th>
-                    <th>Date</th>
-                    <th>Contenu</th>
-                    <th>Vues</th>
-                    <th>Engagement</th>
-                  </tr>
-                </thead>
-                <tbody id="insights-leaderboard-body"></tbody>
-              </table>
-              <p id="insights-leaderboard-empty" class="empty-hint" style="display: none">Aucun contenu pour l'instant.</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="tab-panel" id="tab-conversion" data-tab-panel="conversion" hidden>
-          <h2 class="section-title">Conversion — clics &amp; abonnés</h2>
-          <form id="conversion-form" class="conversion-form">
-            <label>
-              Compte
-              <select id="conversion-form-account" required></select>
-            </label>
-            <label>
-              Date
-              <input type="date" id="conversion-form-date" required />
-            </label>
-            <label>
-              Clics lien bio
-              <input type="number" id="conversion-form-clicks" min="0" value="0" />
-            </label>
-            <label>
-              Nouveaux abonnés
-              <input type="number" id="conversion-form-subs" min="0" value="0" />
-            </label>
-            <label>
-              Revenu (€, optionnel)
-              <input type="number" id="conversion-form-revenue" min="0" step="0.01" />
-            </label>
-            <button type="submit" class="btn-primary">Enregistrer</button>
-          </form>
-
-          <div class="chart-card-head standalone-head">
-            <span></span>
-            <select id="conversion-account-filter"></select>
-          </div>
-
-          <div class="conversion-charts">
-            <div class="chart-card">
-              <h2 class="section-title section-title-sm">Vues du contenu</h2>
               <div class="chart-wrap chart-wrap-line">
-                <canvas id="conversion-views-chart"></canvas>
-                <p id="conversion-views-empty" class="empty-hint" style="display: none">Pas encore de contenu publié.</p>
+                <canvas id="trend-chart"></canvas>
               </div>
             </div>
-            <div class="chart-card">
-              <h2 class="section-title section-title-sm">Clics &amp; nouveaux abonnés</h2>
-              <div class="chart-wrap chart-wrap-line">
-                <canvas id="conversion-metrics-chart"></canvas>
-                <p id="conversion-metrics-empty" class="empty-hint" style="display: none">Pas encore de données de conversion.</p>
+          </section>
+
+          <section class="tab-panel" id="tab-insights" data-tab-panel="insights" hidden>
+            <div class="insights-head">
+              <h2 class="section-title">Insights — quoi dupliquer</h2>
+              <div class="segmented" id="insights-metric-toggle">
+                <button type="button" class="segmented-option is-active" data-category="views">Vues</button>
+                <button type="button" class="segmented-option" data-category="engagement">Engagement</button>
               </div>
             </div>
-          </div>
 
-          <div class="table-card">
-            <div class="table-card-head">
-              <h2 class="section-title">Journal de conversion</h2>
-            </div>
-            <div class="table-wrap">
-              <table id="conversion-log-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Compte</th>
-                    <th>Clics</th>
-                    <th>Abonnés</th>
-                    <th>Revenu</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="conversion-log-body"></tbody>
-              </table>
-              <p id="conversion-log-empty" class="empty-hint" style="display: none">Aucune donnée de conversion pour l'instant.</p>
-            </div>
-          </div>
-        </section>
+            <p id="insights-empty" class="empty-hint" style="display: none">Pas encore assez de données.</p>
 
-        <section class="tab-panel" id="tab-journal" data-tab-panel="journal" hidden>
-          <div class="table-card">
-            <div class="table-card-head">
-              <h2 class="section-title">Journal complet</h2>
-              <select id="log-account-filter"></select>
+            <div class="insights-grid" id="insights-grid">
+              <div class="chart-card chart-card-mini">
+                <h2 class="section-title section-title-sm">Hook</h2>
+                <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-hook"></canvas></div>
+              </div>
+              <div class="chart-card chart-card-mini">
+                <h2 class="section-title section-title-sm">Format</h2>
+                <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-format"></canvas></div>
+              </div>
+              <div class="chart-card chart-card-mini">
+                <h2 class="section-title section-title-sm">Longueur</h2>
+                <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-longueur"></canvas></div>
+              </div>
+              <div class="chart-card chart-card-mini">
+                <h2 class="section-title section-title-sm">CTA</h2>
+                <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-cta"></canvas></div>
+              </div>
+              <div class="chart-card chart-card-mini">
+                <h2 class="section-title section-title-sm">Son</h2>
+                <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-son"></canvas></div>
+              </div>
             </div>
-            <div class="table-wrap">
-              <table id="log-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Compte</th>
-                    <th>Contenu</th>
-                    <th>Vues</th>
-                    <th>Likes</th>
-                    <th>Comm.</th>
-                    <th>Partages</th>
-                    <th>Notes</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="log-body"></tbody>
-              </table>
-              <p id="log-empty" class="empty-hint" style="display: none">Aucune entrée pour l'instant. Ajoute ta première publication à gauche.</p>
+
+            <div class="table-card">
+              <div class="table-card-head">
+                <h2 class="section-title">Top contenus</h2>
+                <select id="insights-leaderboard-sort">
+                  <option value="views">Trier par vues</option>
+                  <option value="engagement">Trier par engagement</option>
+                </select>
+              </div>
+              <div class="table-wrap">
+                <table id="insights-leaderboard-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Date</th>
+                      <th>Contenu</th>
+                      <th>Vues</th>
+                      <th>Engagement</th>
+                    </tr>
+                  </thead>
+                  <tbody id="insights-leaderboard-body"></tbody>
+                </table>
+                <p id="insights-leaderboard-empty" class="empty-hint" style="display: none">Aucun contenu pour l'instant.</p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <section class="tab-panel" id="tab-conversion" data-tab-panel="conversion" hidden>
+            <h2 class="section-title">Conversion — clics &amp; abonnés</h2>
+            <form id="conversion-form" class="conversion-form">
+              <label>
+                Date
+                <input type="date" id="conversion-form-date" required />
+              </label>
+              <label>
+                Clics lien bio
+                <input type="number" id="conversion-form-clicks" min="0" value="0" />
+              </label>
+              <label>
+                Nouveaux abonnés
+                <input type="number" id="conversion-form-subs" min="0" value="0" />
+              </label>
+              <label>
+                Revenu (€, optionnel)
+                <input type="number" id="conversion-form-revenue" min="0" step="0.01" />
+              </label>
+              <button type="submit" class="btn-primary">Enregistrer</button>
+            </form>
+
+            <div class="conversion-charts">
+              <div class="chart-card">
+                <h2 class="section-title section-title-sm">Vues du contenu</h2>
+                <div class="chart-wrap chart-wrap-line">
+                  <canvas id="conversion-views-chart"></canvas>
+                  <p id="conversion-views-empty" class="empty-hint" style="display: none">Pas encore de contenu publié.</p>
+                </div>
+              </div>
+              <div class="chart-card">
+                <h2 class="section-title section-title-sm">Clics &amp; nouveaux abonnés</h2>
+                <div class="chart-wrap chart-wrap-line">
+                  <canvas id="conversion-metrics-chart"></canvas>
+                  <p id="conversion-metrics-empty" class="empty-hint" style="display: none">Pas encore de données de conversion.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-card">
+              <div class="table-card-head">
+                <h2 class="section-title">Journal de conversion</h2>
+              </div>
+              <div class="table-wrap">
+                <table id="conversion-log-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Clics</th>
+                      <th>Abonnés</th>
+                      <th>Revenu</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="conversion-log-body"></tbody>
+                </table>
+                <p id="conversion-log-empty" class="empty-hint" style="display: none">Aucune donnée de conversion pour l'instant.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="tab-journal" data-tab-panel="journal" hidden>
+            <div class="table-card">
+              <div class="table-card-head">
+                <h2 class="section-title">Journal complet</h2>
+              </div>
+              <div class="table-wrap">
+                <table id="log-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Contenu</th>
+                      <th>Vues</th>
+                      <th>Likes</th>
+                      <th>Comm.</th>
+                      <th>Partages</th>
+                      <th>Notes</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="log-body"></tbody>
+                </table>
+                <p id="log-empty" class="empty-hint" style="display: none">Aucune entrée pour l'instant.</p>
+              </div>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
 
