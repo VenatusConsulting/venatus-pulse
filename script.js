@@ -459,6 +459,10 @@ function formatPercent(x) {
   return (x * 100).toFixed(1).replace(".0", "") + "%";
 }
 
+function formatCurrency(n) {
+  return Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+}
+
 function engagementRate(e) {
   const views = Number(e.views || 0);
   if (views <= 0) return 0;
@@ -480,6 +484,15 @@ function daysSince(dateStr) {
   if (isNaN(posted)) return 0;
   const diffMs = new Date().setHours(0, 0, 0, 0) - posted.setHours(0, 0, 0, 0);
   return Math.max(0, Math.round(diffMs / 86400000));
+}
+
+// days since an account's most recent post — flags accounts that have gone quiet,
+// distinct from daysSince() which tracks the age of one specific reel.
+function daysSinceLastPost(accountId) {
+  const accEntries = entriesForAccount(accountId);
+  if (accEntries.length === 0) return null;
+  const lastDate = accEntries.map((e) => e.date).sort().slice(-1)[0];
+  return daysSince(lastDate);
 }
 
 function tagChipsHtml(tags) {
@@ -618,14 +631,19 @@ function computeModelStats(niche) {
     }
   });
 
-  return { ...base, bestAccountName };
+  const modelConversions = conversions.filter((c) => accIds.has(c.accountId));
+  const totalRevenue = modelConversions.reduce((s, c) => s + Number(c.revenue || 0), 0);
+
+  return { ...base, bestAccountName, totalRevenue };
 }
 
 function computeAccountStats(accountId) {
   const entriesList = entriesForAccount(accountId);
   const base = computeStatsForEntries(entriesList);
-  const totalNewSubs = conversions.filter((c) => c.accountId === accountId).reduce((s, c) => s + Number(c.newSubs || 0), 0);
-  return { ...base, totalNewSubs };
+  const accountConversions = conversions.filter((c) => c.accountId === accountId);
+  const totalNewSubs = accountConversions.reduce((s, c) => s + Number(c.newSubs || 0), 0);
+  const totalRevenue = accountConversions.reduce((s, c) => s + Number(c.revenue || 0), 0);
+  return { ...base, totalNewSubs, totalRevenue };
 }
 
 function setStatSlot(slot, label, value) {
@@ -757,6 +775,7 @@ function renderNicheLeaderboard() {
         avgViews: stats.totalViews / entriesList.length,
         avgEngagement: stats.avgEngagement,
         bestAccountName: stats.bestAccountName,
+        totalRevenue: stats.totalRevenue,
       };
     })
     .filter(Boolean)
@@ -778,6 +797,7 @@ function renderNicheLeaderboard() {
       <td>${formatCompact(r.totalViews)}</td>
       <td>${formatCompact(Math.round(r.avgViews))}</td>
       <td>${formatPercent(r.avgEngagement)}</td>
+      <td>${formatCurrency(r.totalRevenue)}</td>
       <td>${escapeHtml(r.bestAccountName)}</td>
     `;
     body.appendChild(tr);
@@ -819,6 +839,7 @@ function renderModelView() {
   setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
   setStatSlot("c", "Meilleur compte", stats.bestAccountName);
   setStatSlot("d", "Meilleur reel", stats.bestEntryLabel);
+  setStatSlot("e", "Revenu total", formatCurrency(stats.totalRevenue));
 
   renderModelAccountCards(niche);
 }
@@ -863,11 +884,22 @@ function renderModelAccountCards(niche) {
     } else {
       stat.textContent = "aucune entrée";
     }
+    const headParts = [dot, name, statusBadge];
+    // only for accounts that HAVE posted before but gone quiet since — a brand-new
+    // account with zero entries already reads "aucune entrée", no need to pile on.
+    const inactiveDays = daysSinceLastPost(acc.id);
+    if (inactiveDays !== null && inactiveDays >= 7) {
+      const inactiveBadge = document.createElement("span");
+      inactiveBadge.className = "review-badge";
+      inactiveBadge.textContent = `Inactif · ${inactiveDays}j`;
+      headParts.push(inactiveBadge);
+    }
     const del = document.createElement("button");
     del.className = "row-delete account-card-delete";
     del.textContent = "✕";
     del.title = "Supprimer ce compte";
-    head.append(dot, name, statusBadge, stat, del);
+    headParts.push(stat, del);
+    head.append(...headParts);
     card.appendChild(head);
 
     const canvasWrap = document.createElement("div");
@@ -930,6 +962,7 @@ function renderAccountView() {
   setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
   setStatSlot("c", "Meilleur reel", stats.bestEntryLabel);
   setStatSlot("d", "Nouveaux abonnés", stats.totalNewSubs.toLocaleString("fr-FR"));
+  setStatSlot("e", "Revenu total", formatCurrency(stats.totalRevenue));
 
   renderAccountInfo(acc);
   document.getElementById("account-info-view").hidden = editingAccountInfo;

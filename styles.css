@@ -49,6 +49,10 @@ body {
   font-size: 14px;
 }
 
+.app[hidden] {
+  display: none;
+}
+
 .app {
   display: flex;
   min-height: 100vh;
@@ -116,6 +120,11 @@ body {
 }
 
 /* --- login / loading screens --------------------------------------------- */
+
+.login-screen[hidden],
+.loading-screen[hidden] {
+  display: none;
+}
 
 .login-screen,
 .loading-screen {
