@@ -86,7 +86,11 @@ function migrateEntry(e) {
     comments: e.comments,
     shares: e.shares,
     notes: e.notes,
-    duplicateCount: Number(e.duplicateCount) || 0,
+    // set only when this entry was created via the "Dupliquer" flow from another reel —
+    // denormalized (name/label snapshot) so the origin still reads fine if the source is later deleted
+    duplicatedFromEntryId: e.duplicatedFromEntryId || null,
+    duplicatedFromAccountName: typeof e.duplicatedFromAccountName === "string" ? e.duplicatedFromAccountName : "",
+    duplicatedFromLabel: typeof e.duplicatedFromLabel === "string" ? e.duplicatedFromLabel : "",
   };
 }
 function loadEntriesLocal() {
@@ -200,7 +204,9 @@ function mapEntryToDb(e) {
     comments: e.comments,
     shares: e.shares,
     notes: e.notes || "",
-    duplicate_count: e.duplicateCount || 0,
+    duplicated_from_entry_id: e.duplicatedFromEntryId || null,
+    duplicated_from_account_name: e.duplicatedFromAccountName || "",
+    duplicated_from_label: e.duplicatedFromLabel || "",
   };
 }
 function mapEntryFromDb(row) {
@@ -216,7 +222,9 @@ function mapEntryFromDb(row) {
     comments: row.comments,
     shares: row.shares,
     notes: row.notes,
-    duplicateCount: row.duplicate_count,
+    duplicatedFromEntryId: row.duplicated_from_entry_id,
+    duplicatedFromAccountName: row.duplicated_from_account_name,
+    duplicatedFromLabel: row.duplicated_from_label,
   });
 }
 
@@ -274,6 +282,13 @@ let editingEntryId = null;
 
 // whether the "Infos du compte" card is in edit mode
 let editingAccountInfo = false;
+
+// id of the leaderboard entry currently showing its target-account picker, or null
+let duplicatingEntryId = null;
+
+// { entryId, label, tags, soundName, accountName } of the source reel being duplicated
+// into the sidebar's "new entry" form, or null once submitted/cancelled
+let pendingDuplicate = null;
 
 // --- sync queue (persisted — a failed cloud write is retried, never silently dropped) ---
 
@@ -507,6 +522,18 @@ function soundNameHtml(soundName) {
   return `<div class="sound-name-tag">🎵 ${escapeHtml(soundName.trim())}</div>`;
 }
 
+// how many times this reel has been duplicated onto other accounts —
+// derived from the entries that reference it, never stored directly, so it can't drift out of sync
+function duplicateCountFor(entryId) {
+  return entries.filter((e) => e.duplicatedFromEntryId === entryId).length;
+}
+
+function duplicateOriginHtml(entry) {
+  if (!entry.duplicatedFromEntryId) return "";
+  const label = entry.duplicatedFromLabel ? ` — "${escapeHtml(entry.duplicatedFromLabel)}"` : "";
+  return `<div class="duplicate-origin">🔁 Dupliqué depuis <strong>${escapeHtml(entry.duplicatedFromAccountName || "un autre compte")}</strong>${label}</div>`;
+}
+
 // --- model / account scoping ---------------------------------------------
 
 function allModelNames() {
@@ -658,6 +685,7 @@ function goToModels() {
   currentAccountId = null;
   editingEntryId = null;
   editingAccountInfo = false;
+  pendingDuplicate = null;
   renderCurrentView();
 }
 
@@ -667,6 +695,7 @@ function goToModel(niche) {
   currentAccountId = null;
   editingEntryId = null;
   editingAccountInfo = false;
+  pendingDuplicate = null;
   renderCurrentView();
 }
 
@@ -679,6 +708,7 @@ function goToAccount(accountId) {
   activeTab = "dashboard";
   editingEntryId = null;
   editingAccountInfo = false;
+  pendingDuplicate = null;
   renderCurrentView();
 }
 
@@ -690,6 +720,7 @@ function renderCurrentView() {
 
   document.getElementById("sidebar-add-account").hidden = currentView !== "model";
   document.getElementById("sidebar-new-entry").hidden = currentView !== "account";
+  renderDuplicateBanner();
 
   if (currentView === "models") renderModelsView();
   else if (currentView === "model") renderModelView();
@@ -1213,7 +1244,7 @@ function renderLogTable() {
     const ageBadge = `<span class="${age >= 7 ? "review-badge" : "day-count"}">J+${age}</span>`;
     tr.innerHTML = `
       <td>${escapeHtml(e.date)}<br>${ageBadge}</td>
-      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}</td>
+      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.comments || 0).toLocaleString("fr-FR")}</td>
@@ -1270,12 +1301,59 @@ function startEditEntry(entryId) {
 
 function cancelEditEntry() {
   editingEntryId = null;
+  pendingDuplicate = null;
   const form = document.getElementById("entry-form");
   form.reset();
   document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
   populateTagSelects();
   document.getElementById("entry-form-submit").textContent = "Enregistrer l'entrée";
   document.getElementById("entry-form-cancel").hidden = true;
+  renderDuplicateBanner();
+}
+
+function renderDuplicateBanner() {
+  const banner = document.getElementById("duplicate-banner");
+  if (!pendingDuplicate) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  document.getElementById("duplicate-banner-account").textContent = pendingDuplicate.accountName || "un compte";
+  document.getElementById("duplicate-banner-label").textContent = pendingDuplicate.label || "(sans label)";
+}
+
+// pre-fills the sidebar "new entry" form on the target account with the source reel's
+// recipe (label/tags/son) so the user only has to confirm date + fresh stats — the
+// resulting entry gets linked back to its origin once saved (see entry-form submit handler)
+function startDuplicateFlow(sourceEntry, targetAccountId) {
+  if (!targetAccountId) return;
+  const sourceAccount = accounts.find((a) => a.id === sourceEntry.accountId);
+  duplicatingEntryId = null;
+  goToAccount(targetAccountId);
+  pendingDuplicate = {
+    entryId: sourceEntry.id,
+    label: sourceEntry.label || "",
+    tags: { ...sourceEntry.tags },
+    soundName: sourceEntry.soundName || "",
+    accountName: sourceAccount ? sourceAccount.name : "",
+  };
+  switchTab("journal");
+  document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("entry-label").value = pendingDuplicate.label;
+  TAG_AXES.forEach((axis) => {
+    const select = document.getElementById(`entry-tag-${axis}`);
+    if (!select) return;
+    const tagValue = pendingDuplicate.tags[axis] || TAG_UNCLASSIFIED;
+    const exists = [...select.options].some((o) => o.value === tagValue);
+    select.value = exists ? tagValue : TAG_UNCLASSIFIED;
+  });
+  document.getElementById("entry-sound-name").value = pendingDuplicate.soundName;
+  document.getElementById("entry-views").value = 0;
+  document.getElementById("entry-likes").value = 0;
+  document.getElementById("entry-comments").value = 0;
+  document.getElementById("entry-shares").value = 0;
+  document.getElementById("entry-notes").value = "";
+  renderDuplicateBanner();
 }
 
 // --- insights tab (single account) ------------------------------------------
@@ -1416,29 +1494,63 @@ function renderInsightsLeaderboard(filteredEntries) {
     tr.innerHTML = `
       <td class="${rankClass}">${i + 1}</td>
       <td>${escapeHtml(e.date)}</td>
-      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}</td>
+      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
       <td>${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${formatPercent(engagementRate(e))}</td>
     `;
     const dupTd = document.createElement("td");
     dupTd.className = "duplicate-cell";
-    const dupCount = document.createElement("span");
-    dupCount.className = "duplicate-count";
-    dupCount.textContent = e.duplicateCount || 0;
-    const dupBtn = document.createElement("button");
-    dupBtn.type = "button";
-    dupBtn.className = "btn-icon duplicate-btn";
-    dupBtn.textContent = "+1";
-    dupBtn.title = "Marquer ce contenu comme dupliqué sur un autre compte";
-    dupBtn.addEventListener("click", () => {
-      const entry = entries.find((x) => x.id === e.id);
-      if (!entry) return;
-      entry.duplicateCount = (entry.duplicateCount || 0) + 1;
-      saveEntriesLocal(entries);
-      queueSync("entries", "upsert", mapEntryToDb(entry));
-      renderInsights();
-    });
-    dupTd.append(dupCount, dupBtn);
+
+    if (duplicatingEntryId === e.id) {
+      const otherAccounts = accounts
+        .filter((a) => a.id !== currentAccountId)
+        .sort((a, b) => (a.niche + a.name).localeCompare(b.niche + b.name));
+
+      if (otherAccounts.length === 0) {
+        dupTd.innerHTML = `<span class="recipe-value-empty">Aucun autre compte</span>`;
+      } else {
+        const select = document.createElement("select");
+        select.className = "duplicate-target-select";
+        otherAccounts.forEach((a) => {
+          const opt = document.createElement("option");
+          opt.value = a.id;
+          opt.textContent = `${a.niche || "Sans modèle"} · ${a.name}`;
+          select.appendChild(opt);
+        });
+        const goBtn = document.createElement("button");
+        goBtn.type = "button";
+        goBtn.className = "btn-icon duplicate-btn";
+        goBtn.textContent = "OK";
+        goBtn.title = "Dupliquer vers ce compte";
+        goBtn.addEventListener("click", () => startDuplicateFlow(e, select.value));
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.className = "btn-icon duplicate-btn";
+        cancelBtn.textContent = "✕";
+        cancelBtn.title = "Annuler";
+        cancelBtn.addEventListener("click", () => {
+          duplicatingEntryId = null;
+          renderInsightsLeaderboard(filteredEntries);
+        });
+        dupTd.append(select, goBtn, cancelBtn);
+      }
+    } else {
+      const count = duplicateCountFor(e.id);
+      const dupCount = document.createElement("span");
+      dupCount.className = "duplicate-count";
+      dupCount.textContent = count > 0 ? `🔁 ${count}` : "—";
+      const dupBtn = document.createElement("button");
+      dupBtn.type = "button";
+      dupBtn.className = "btn-icon duplicate-btn";
+      dupBtn.textContent = "Dupliquer";
+      dupBtn.title = "Dupliquer ce contenu vers un autre compte";
+      dupBtn.addEventListener("click", () => {
+        duplicatingEntryId = e.id;
+        renderInsightsLeaderboard(filteredEntries);
+      });
+      dupTd.append(dupCount, dupBtn);
+    }
+
     tr.appendChild(dupTd);
     body.appendChild(tr);
   });
@@ -1750,7 +1862,14 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
       savedEntry = entries[idx];
     }
   } else {
-    savedEntry = { id: uid(), duplicateCount: 0, ...payload };
+    const dupFields = pendingDuplicate
+      ? {
+          duplicatedFromEntryId: pendingDuplicate.entryId,
+          duplicatedFromAccountName: pendingDuplicate.accountName,
+          duplicatedFromLabel: pendingDuplicate.label,
+        }
+      : {};
+    savedEntry = { id: uid(), ...dupFields, ...payload };
     entries.push(savedEntry);
   }
   saveEntriesLocal(entries);
@@ -1760,6 +1879,10 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
 });
 
 document.getElementById("entry-form-cancel").addEventListener("click", () => {
+  cancelEditEntry();
+});
+
+document.getElementById("duplicate-banner-cancel").addEventListener("click", () => {
   cancelEditEntry();
 });
 
