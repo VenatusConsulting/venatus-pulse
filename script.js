@@ -550,6 +550,33 @@ function daysSinceLastPost(accountId) {
   return daysSince(lastDate);
 }
 
+// minimum reels required in each 14-day window before a view-drop is trusted —
+// same guard rail as RECIPE_MIN_SAMPLES, avoids flagging on one unlucky post
+const VIEW_DROP_MIN_SAMPLES = 2;
+const VIEW_DROP_THRESHOLD = 0.4; // 40%+ drop in average views week-over-week
+
+// compares avg views of the last 14 days against the 14 days before that —
+// a sustained drop this large usually means shadowban/algo penalty, not just variance
+function detectViewDrop(accountId) {
+  const recent = [];
+  const prior = [];
+  entriesForAccount(accountId).forEach((e) => {
+    const age = daysSince(e.date);
+    if (age < 14) recent.push(e);
+    else if (age < 28) prior.push(e);
+  });
+  if (recent.length < VIEW_DROP_MIN_SAMPLES || prior.length < VIEW_DROP_MIN_SAMPLES) return null;
+
+  const recentAvg = recent.reduce((s, e) => s + Number(e.views || 0), 0) / recent.length;
+  const priorAvg = prior.reduce((s, e) => s + Number(e.views || 0), 0) / prior.length;
+  if (priorAvg <= 0) return null;
+
+  const dropRatio = (priorAvg - recentAvg) / priorAvg;
+  if (dropRatio < VIEW_DROP_THRESHOLD) return null;
+
+  return { dropPercent: Math.round(dropRatio * 100), recentAvg, priorAvg };
+}
+
 function tagChipsHtml(tags) {
   if (!tags) return "";
   const chips = TAG_AXES.map((axis) => tags[axis]).filter((t) => t && t !== TAG_UNCLASSIFIED);
@@ -795,7 +822,101 @@ function renderModelsView() {
     if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
   }
 
+  renderTodayDigest();
   renderCompareSection();
+}
+
+// --- "Aujourd'hui" digest: every account-scoped alert in one place ---------
+
+// accounts already flagged inactive-by-design don't need cadence/drop nagging —
+// only accounts meant to be actively posting are worth surfacing here
+function digestEligibleAccounts() {
+  return accounts.filter((a) => a.status !== "pause" && a.status !== "banni");
+}
+
+function buildDigestItem(acc, severity, detail) {
+  const item = document.createElement("div");
+  item.className = `digest-item digest-item-${severity}`;
+  item.setAttribute("role", "button");
+  item.setAttribute("tabindex", "0");
+  item.innerHTML = `
+    <span class="digest-item-name">${escapeHtml(acc.name)} <span class="digest-item-niche">· ${escapeHtml(acc.niche || "Sans modèle")}</span></span>
+    <span class="digest-item-detail">${detail}</span>
+  `;
+  item.addEventListener("click", () => goToAccount(acc.id));
+  item.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      goToAccount(acc.id);
+    }
+  });
+  return item;
+}
+
+function renderTodayDigest() {
+  const container = document.getElementById("today-digest-groups");
+  container.innerHTML = "";
+
+  const eligible = digestEligibleAccounts();
+  const inactive = [];
+  const stale = [];
+  const drops = [];
+
+  eligible.forEach((acc) => {
+    const inactiveDays = daysSinceLastPost(acc.id);
+    if (inactiveDays !== null && inactiveDays >= 7) inactive.push({ acc, inactiveDays });
+
+    // bounded to "just crossed J+7" (7-14j) so this list stays short and actionable —
+    // the per-account Journal banner still shows the full unbounded backlog for that account
+    const staleCount = entriesForAccount(acc.id).filter((e) => {
+      const age = daysSince(e.date);
+      return age >= 7 && age < 14;
+    }).length;
+    if (staleCount > 0) stale.push({ acc, staleCount });
+
+    const drop = detectViewDrop(acc.id);
+    if (drop) drops.push({ acc, drop });
+  });
+
+  if (drops.length === 0 && inactive.length === 0 && stale.length === 0) {
+    container.innerHTML = '<p class="digest-empty">Rien à signaler — tous les comptes actifs sont à jour. 🎉</p>';
+    return;
+  }
+
+  if (drops.length > 0) {
+    const group = document.createElement("div");
+    group.innerHTML = `<p class="digest-group-title">⚠️ Baisse de vues suspecte (${drops.length})</p>`;
+    drops
+      .sort((a, b) => b.drop.dropPercent - a.drop.dropPercent)
+      .forEach(({ acc, drop }) => {
+        group.appendChild(
+          buildDigestItem(acc, "danger", `-${drop.dropPercent}% vs les 14j précédents`)
+        );
+      });
+    container.appendChild(group);
+  }
+
+  if (inactive.length > 0) {
+    const group = document.createElement("div");
+    group.innerHTML = `<p class="digest-group-title">💤 Comptes inactifs (${inactive.length})</p>`;
+    inactive
+      .sort((a, b) => b.inactiveDays - a.inactiveDays)
+      .forEach(({ acc, inactiveDays }) => {
+        group.appendChild(buildDigestItem(acc, "warning", `${inactiveDays}j sans post`));
+      });
+    container.appendChild(group);
+  }
+
+  if (stale.length > 0) {
+    const group = document.createElement("div");
+    group.innerHTML = `<p class="digest-group-title">📝 Reels qui viennent de passer J+7 (${stale.length})</p>`;
+    stale
+      .sort((a, b) => b.staleCount - a.staleCount)
+      .forEach(({ acc, staleCount }) => {
+        group.appendChild(buildDigestItem(acc, "warning", `${staleCount} reel${staleCount > 1 ? "s" : ""} à vérifier`));
+      });
+    container.appendChild(group);
+  }
 }
 
 // --- cross-model comparison (which niche/tag wins across everyone) ---------
