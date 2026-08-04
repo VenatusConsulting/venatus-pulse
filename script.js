@@ -86,17 +86,42 @@ function migrateEntry(e) {
     comments: e.comments,
     shares: e.shares,
     notes: e.notes,
+    // stable per-account reel number, assigned once at creation and never reassigned —
+    // null here means "not backfilled yet", handled by backfillEntrySeq() at load time
+    seq: e.seq != null ? Number(e.seq) : null,
     // set only when this entry was created via the "Dupliquer" flow from another reel —
-    // denormalized (name/label snapshot) so the origin still reads fine if the source is later deleted
+    // denormalized (name/label/seq snapshot) so the origin still reads fine if the source is later deleted
     duplicatedFromEntryId: e.duplicatedFromEntryId || null,
     duplicatedFromAccountName: typeof e.duplicatedFromAccountName === "string" ? e.duplicatedFromAccountName : "",
     duplicatedFromLabel: typeof e.duplicatedFromLabel === "string" ? e.duplicatedFromLabel : "",
+    duplicatedFromSeq: e.duplicatedFromSeq != null ? Number(e.duplicatedFromSeq) : null,
   };
+}
+
+// assigns a stable, permanent per-account reel number to any entry that doesn't have one yet
+// (data saved before this feature existed) — computed once in creation-date order, then the
+// caller persists it so numbers never shift again after this pass. Returns the entries touched.
+function backfillEntrySeq(list) {
+  const maxByAccount = {};
+  list.forEach((e) => {
+    if (e.seq != null) maxByAccount[e.accountId] = Math.max(maxByAccount[e.accountId] || 0, e.seq);
+  });
+  const missing = list
+    .filter((e) => e.seq == null)
+    .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.id).localeCompare(String(b.id)));
+  missing.forEach((e) => {
+    const next = (maxByAccount[e.accountId] || 0) + 1;
+    e.seq = next;
+    maxByAccount[e.accountId] = next;
+  });
+  return missing;
 }
 function loadEntriesLocal() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_ENTRIES)) || [];
-    return raw.map(migrateEntry);
+    const list = raw.map(migrateEntry);
+    if (backfillEntrySeq(list).length) saveEntriesLocal(list);
+    return list;
   } catch {
     return [];
   }
@@ -204,9 +229,11 @@ function mapEntryToDb(e) {
     comments: e.comments,
     shares: e.shares,
     notes: e.notes || "",
+    seq: e.seq != null ? e.seq : null,
     duplicated_from_entry_id: e.duplicatedFromEntryId || null,
     duplicated_from_account_name: e.duplicatedFromAccountName || "",
     duplicated_from_label: e.duplicatedFromLabel || "",
+    duplicated_from_seq: e.duplicatedFromSeq != null ? e.duplicatedFromSeq : null,
   };
 }
 function mapEntryFromDb(row) {
@@ -222,9 +249,11 @@ function mapEntryFromDb(row) {
     comments: row.comments,
     shares: row.shares,
     notes: row.notes,
+    seq: row.seq,
     duplicatedFromEntryId: row.duplicated_from_entry_id,
     duplicatedFromAccountName: row.duplicated_from_account_name,
     duplicatedFromLabel: row.duplicated_from_label,
+    duplicatedFromSeq: row.duplicated_from_seq,
   });
 }
 
@@ -367,11 +396,15 @@ async function loadAllData() {
       await migrateLocalDataToCloud();
     }
 
+    const backfilledEntries = backfillEntrySeq(entries);
+
     saveAccountsLocal(accounts);
     saveEntriesLocal(entries);
     saveConversionsLocal(conversions);
     saveModelsLocal(models);
     saveTagVocabLocal(tagVocab);
+
+    backfilledEntries.forEach((en) => queueSync("entries", "upsert", mapEntryToDb(en)));
   } catch (err) {
     console.warn("Supabase indisponible, repli sur le cache local", err);
     accounts = loadAccountsLocal();
@@ -522,6 +555,10 @@ function soundNameHtml(soundName) {
   return `<div class="sound-name-tag">🎵 ${escapeHtml(soundName.trim())}</div>`;
 }
 
+function entrySeqBadge(entry) {
+  return entry.seq != null ? `<span class="entry-seq">#${entry.seq}</span> ` : "";
+}
+
 // how many times this reel has been duplicated onto other accounts —
 // derived from the entries that reference it, never stored directly, so it can't drift out of sync
 function duplicateCountFor(entryId) {
@@ -530,7 +567,8 @@ function duplicateCountFor(entryId) {
 
 function duplicateOriginHtml(entry) {
   if (!entry.duplicatedFromEntryId) return "";
-  const label = entry.duplicatedFromLabel ? ` — "${escapeHtml(entry.duplicatedFromLabel)}"` : "";
+  const seqPrefix = entry.duplicatedFromSeq != null ? `#${entry.duplicatedFromSeq} ` : "";
+  const label = entry.duplicatedFromLabel ? ` — "${seqPrefix}${escapeHtml(entry.duplicatedFromLabel)}"` : "";
   return `<div class="duplicate-origin">🔁 Dupliqué depuis <strong>${escapeHtml(entry.duplicatedFromAccountName || "un autre compte")}</strong>${label}</div>`;
 }
 
@@ -1244,7 +1282,7 @@ function renderLogTable() {
     const ageBadge = `<span class="${age >= 7 ? "review-badge" : "day-count"}">J+${age}</span>`;
     tr.innerHTML = `
       <td>${escapeHtml(e.date)}<br>${ageBadge}</td>
-      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
+      <td>${entrySeqBadge(e)}${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.comments || 0).toLocaleString("fr-FR")}</td>
@@ -1319,7 +1357,8 @@ function renderDuplicateBanner() {
   }
   banner.hidden = false;
   document.getElementById("duplicate-banner-account").textContent = pendingDuplicate.accountName || "un compte";
-  document.getElementById("duplicate-banner-label").textContent = pendingDuplicate.label || "(sans label)";
+  const seqPrefix = pendingDuplicate.seq != null ? `#${pendingDuplicate.seq} ` : "";
+  document.getElementById("duplicate-banner-label").textContent = seqPrefix + (pendingDuplicate.label || "(sans label)");
 }
 
 // pre-fills the sidebar "new entry" form on the target account with the source reel's
@@ -1336,6 +1375,7 @@ function startDuplicateFlow(sourceEntry, targetAccountId) {
     tags: { ...sourceEntry.tags },
     soundName: sourceEntry.soundName || "",
     accountName: sourceAccount ? sourceAccount.name : "",
+    seq: sourceEntry.seq,
   };
   switchTab("journal");
   document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
@@ -1494,7 +1534,7 @@ function renderInsightsLeaderboard(filteredEntries) {
     tr.innerHTML = `
       <td class="${rankClass}">${i + 1}</td>
       <td>${escapeHtml(e.date)}</td>
-      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
+      <td>${entrySeqBadge(e)}${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
       <td>${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${formatPercent(engagementRate(e))}</td>
     `;
@@ -1867,9 +1907,11 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
           duplicatedFromEntryId: pendingDuplicate.entryId,
           duplicatedFromAccountName: pendingDuplicate.accountName,
           duplicatedFromLabel: pendingDuplicate.label,
+          duplicatedFromSeq: pendingDuplicate.seq,
         }
       : {};
-    savedEntry = { id: uid(), ...dupFields, ...payload };
+    const nextSeq = Math.max(0, ...entriesForAccount(currentAccountId).map((x) => x.seq || 0)) + 1;
+    savedEntry = { id: uid(), seq: nextSeq, ...dupFields, ...payload };
     entries.push(savedEntry);
   }
   saveEntriesLocal(entries);
