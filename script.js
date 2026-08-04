@@ -1340,6 +1340,60 @@ function renderInsightsAxisChart(axis, filteredEntries) {
   renderAxisChart(document.getElementById(`insights-chart-${axis}`), insightsCharts, axis, filteredEntries, insightsMetric);
 }
 
+// minimum videos sharing a tag before it's trusted enough to recommend —
+// avoids a single lucky reel driving the "winning recipe".
+const RECIPE_MIN_SAMPLES = 2;
+
+function computeWinningRecipe(filteredEntries, metric) {
+  return TAG_AXES.map((axis) => {
+    const best = computeAxisBreakdown(axis, filteredEntries, metric).find(
+      (row) => row.tag !== TAG_UNCLASSIFIED && row.count >= RECIPE_MIN_SAMPLES
+    );
+    return { axis, best: best || null };
+  });
+}
+
+function renderInsightsRecipe(filteredEntries) {
+  const card = document.getElementById("insights-recipe-card");
+  const itemsEl = document.getElementById("insights-recipe-items");
+  const hintEl = document.getElementById("insights-recipe-hint");
+
+  const recipe = computeWinningRecipe(filteredEntries, insightsMetric);
+  const known = recipe.filter((r) => r.best);
+
+  if (known.length === 0) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+  itemsEl.innerHTML = "";
+
+  recipe.forEach(({ axis, best }) => {
+    const item = document.createElement("div");
+    item.className = "recipe-item";
+    if (!best) {
+      item.innerHTML = `
+        <span class="recipe-axis">${TAG_AXIS_LABELS[axis]}</span>
+        <span class="recipe-value recipe-value-empty">pas assez de données</span>
+      `;
+    } else {
+      const metricText =
+        insightsMetric === "engagement" ? formatPercent(best.avgEngagement) : `${formatCompact(best.avgViews)} vues`;
+      item.innerHTML = `
+        <span class="recipe-axis">${TAG_AXIS_LABELS[axis]}</span>
+        <span class="recipe-value">${escapeHtml(best.tag)}</span>
+        <span class="recipe-meta">${best.count} reels · ${metricText} moy.</span>
+      `;
+    }
+    itemsEl.appendChild(item);
+  });
+
+  hintEl.textContent =
+    known.length < TAG_AXES.length
+      ? "Recommandation partielle — ajoute plus d'entrées taguées pour compléter la recette."
+      : "Combo basé sur tes contenus les plus performants — priorité pour ta prochaine duplication.";
+}
+
 function renderInsightsLeaderboard(filteredEntries) {
   const body = document.getElementById("insights-leaderboard-body");
   const emptyMsg = document.getElementById("insights-leaderboard-empty");
@@ -1398,6 +1452,7 @@ function renderInsights() {
   if (filtered.length === 0) {
     emptyMsg.style.display = "block";
     grid.style.display = "none";
+    document.getElementById("insights-recipe-card").style.display = "none";
     TAG_AXES.forEach((axis) => {
       if (insightsCharts[axis]) {
         insightsCharts[axis].destroy();
@@ -1408,6 +1463,7 @@ function renderInsights() {
     emptyMsg.style.display = "none";
     grid.style.display = "grid";
     TAG_AXES.forEach((axis) => renderInsightsAxisChart(axis, filtered));
+    renderInsightsRecipe(filtered);
   }
 
   renderInsightsLeaderboard(filtered);

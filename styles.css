@@ -921,6 +921,64 @@ body {
   margin-bottom: 24px;
 }
 
+.recipe-card {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.recipe-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.recipe-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-width: 120px;
+}
+
+.recipe-axis {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+}
+
+.recipe-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.recipe-value-empty {
+  font-size: 12px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--ink-muted);
+}
+
+.recipe-meta {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.recipe-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
 .chart-card-mini {
   margin-bottom: 0;
 }
