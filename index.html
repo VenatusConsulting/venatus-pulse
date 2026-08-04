@@ -106,6 +106,11 @@
               </div>
             </div>
 
+            <label class="sound-name-field">
+              Nom du son / trend (optionnel)
+              <input type="text" id="entry-sound-name" placeholder="ex: Espresso - Sabrina Carpenter" />
+            </label>
+
             <div class="metric-grid">
               <label>
                 Vues
@@ -194,7 +199,6 @@
                         <th>Vues totales</th>
                         <th>Vues moy./reel</th>
                         <th>Engagement moyen</th>
-                        <th>Revenu total</th>
                         <th>Meilleur compte</th>
                       </tr>
                     </thead>
@@ -227,10 +231,6 @@
             <div class="stat-card">
               <span class="stat-label" id="stat-label-d"></span>
               <span class="stat-value stat-value-text" id="stat-value-d"></span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label" id="stat-label-e"></span>
-              <span class="stat-value" id="stat-value-e"></span>
             </div>
           </div>
         </div>
@@ -346,6 +346,7 @@
                       <th>Contenu</th>
                       <th>Vues</th>
                       <th>Engagement</th>
+                      <th>Dupliqué</th>
                     </tr>
                   </thead>
                   <tbody id="insights-leaderboard-body"></tbody>
@@ -369,10 +370,6 @@
               <label>
                 Nouveaux abonnés
                 <input type="number" id="conversion-form-subs" min="0" value="0" />
-              </label>
-              <label>
-                Revenu (€, optionnel)
-                <input type="number" id="conversion-form-revenue" min="0" step="0.01" />
               </label>
               <button type="submit" class="btn-primary">Enregistrer</button>
             </form>
@@ -405,7 +402,6 @@
                       <th>Date</th>
                       <th>Clics</th>
                       <th>Abonnés</th>
-                      <th>Revenu</th>
                       <th></th>
                     </tr>
                   </thead>

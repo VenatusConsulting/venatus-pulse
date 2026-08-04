@@ -1077,6 +1077,34 @@ td.peak-views {
   color: var(--accent);
 }
 
+.sound-name-tag {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.duplicate-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.duplicate-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 14px;
+  text-align: center;
+}
+
+.duplicate-btn {
+  width: auto;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .day-count {
   font-size: 10px;
   color: var(--ink-muted);

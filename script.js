@@ -80,11 +80,13 @@ function migrateEntry(e) {
       cta: tags.cta || TAG_UNCLASSIFIED,
       son: tags.son || TAG_UNCLASSIFIED,
     },
+    soundName: typeof e.soundName === "string" ? e.soundName : "",
     views: e.views,
     likes: e.likes,
     comments: e.comments,
     shares: e.shares,
     notes: e.notes,
+    duplicateCount: Number(e.duplicateCount) || 0,
   };
 }
 function loadEntriesLocal() {
@@ -192,11 +194,13 @@ function mapEntryToDb(e) {
     date: e.date,
     label: e.label || "",
     tags: e.tags || {},
+    sound_name: e.soundName || "",
     views: e.views,
     likes: e.likes,
     comments: e.comments,
     shares: e.shares,
     notes: e.notes || "",
+    duplicate_count: e.duplicateCount || 0,
   };
 }
 function mapEntryFromDb(row) {
@@ -206,11 +210,13 @@ function mapEntryFromDb(row) {
     date: row.date,
     label: row.label,
     tags: row.tags,
+    soundName: row.sound_name,
     views: row.views,
     likes: row.likes,
     comments: row.comments,
     shares: row.shares,
     notes: row.notes,
+    duplicateCount: row.duplicate_count,
   });
 }
 
@@ -221,7 +227,6 @@ function mapConversionToDb(c) {
     date: c.date,
     link_clicks: c.linkClicks,
     new_subs: c.newSubs,
-    revenue: c.revenue || "",
   };
 }
 function mapConversionFromDb(row) {
@@ -231,7 +236,6 @@ function mapConversionFromDb(row) {
     date: row.date,
     linkClicks: row.link_clicks,
     newSubs: row.new_subs,
-    revenue: row.revenue,
   };
 }
 
@@ -459,10 +463,6 @@ function formatPercent(x) {
   return (x * 100).toFixed(1).replace(".0", "") + "%";
 }
 
-function formatCurrency(n) {
-  return Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
-}
-
 function engagementRate(e) {
   const views = Number(e.views || 0);
   if (views <= 0) return 0;
@@ -500,6 +500,11 @@ function tagChipsHtml(tags) {
   const chips = TAG_AXES.map((axis) => tags[axis]).filter((t) => t && t !== TAG_UNCLASSIFIED);
   if (chips.length === 0) return "";
   return `<div class="tag-chip-row">${chips.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join("")}</div>`;
+}
+
+function soundNameHtml(soundName) {
+  if (!soundName || !soundName.trim()) return "";
+  return `<div class="sound-name-tag">🎵 ${escapeHtml(soundName.trim())}</div>`;
 }
 
 // --- model / account scoping ---------------------------------------------
@@ -567,16 +572,15 @@ function addCustomTag(axis, value) {
 
 // --- daily conversion log (per account, per day — upsert) ----------------
 
-function upsertConversion(accountId, date, linkClicks, newSubs, revenue) {
+function upsertConversion(accountId, date, linkClicks, newSubs) {
   const existing = conversions.find((c) => c.accountId === accountId && c.date === date);
   let row;
   if (existing) {
     existing.linkClicks = linkClicks;
     existing.newSubs = newSubs;
-    existing.revenue = revenue;
     row = existing;
   } else {
-    row = { id: uid(), accountId, date, linkClicks, newSubs, revenue };
+    row = { id: uid(), accountId, date, linkClicks, newSubs };
     conversions.push(row);
   }
   saveConversionsLocal(conversions);
@@ -631,19 +635,14 @@ function computeModelStats(niche) {
     }
   });
 
-  const modelConversions = conversions.filter((c) => accIds.has(c.accountId));
-  const totalRevenue = modelConversions.reduce((s, c) => s + Number(c.revenue || 0), 0);
-
-  return { ...base, bestAccountName, totalRevenue };
+  return { ...base, bestAccountName };
 }
 
 function computeAccountStats(accountId) {
   const entriesList = entriesForAccount(accountId);
   const base = computeStatsForEntries(entriesList);
-  const accountConversions = conversions.filter((c) => c.accountId === accountId);
-  const totalNewSubs = accountConversions.reduce((s, c) => s + Number(c.newSubs || 0), 0);
-  const totalRevenue = accountConversions.reduce((s, c) => s + Number(c.revenue || 0), 0);
-  return { ...base, totalNewSubs, totalRevenue };
+  const totalNewSubs = conversions.filter((c) => c.accountId === accountId).reduce((s, c) => s + Number(c.newSubs || 0), 0);
+  return { ...base, totalNewSubs };
 }
 
 function setStatSlot(slot, label, value) {
@@ -775,7 +774,6 @@ function renderNicheLeaderboard() {
         avgViews: stats.totalViews / entriesList.length,
         avgEngagement: stats.avgEngagement,
         bestAccountName: stats.bestAccountName,
-        totalRevenue: stats.totalRevenue,
       };
     })
     .filter(Boolean)
@@ -797,7 +795,6 @@ function renderNicheLeaderboard() {
       <td>${formatCompact(r.totalViews)}</td>
       <td>${formatCompact(Math.round(r.avgViews))}</td>
       <td>${formatPercent(r.avgEngagement)}</td>
-      <td>${formatCurrency(r.totalRevenue)}</td>
       <td>${escapeHtml(r.bestAccountName)}</td>
     `;
     body.appendChild(tr);
@@ -839,7 +836,6 @@ function renderModelView() {
   setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
   setStatSlot("c", "Meilleur compte", stats.bestAccountName);
   setStatSlot("d", "Meilleur reel", stats.bestEntryLabel);
-  setStatSlot("e", "Revenu total", formatCurrency(stats.totalRevenue));
 
   renderModelAccountCards(niche);
 }
@@ -962,7 +958,6 @@ function renderAccountView() {
   setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
   setStatSlot("c", "Meilleur reel", stats.bestEntryLabel);
   setStatSlot("d", "Nouveaux abonnés", stats.totalNewSubs.toLocaleString("fr-FR"));
-  setStatSlot("e", "Revenu total", formatCurrency(stats.totalRevenue));
 
   renderAccountInfo(acc);
   document.getElementById("account-info-view").hidden = editingAccountInfo;
@@ -1218,7 +1213,7 @@ function renderLogTable() {
     const ageBadge = `<span class="${age >= 7 ? "review-badge" : "day-count"}">J+${age}</span>`;
     tr.innerHTML = `
       <td>${escapeHtml(e.date)}<br>${ageBadge}</td>
-      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}</td>
+      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.comments || 0).toLocaleString("fr-FR")}</td>
@@ -1260,6 +1255,7 @@ function startEditEntry(entryId) {
     const select = document.getElementById(`entry-tag-${axis}`);
     if (select) select.value = (entry.tags && entry.tags[axis]) || TAG_UNCLASSIFIED;
   });
+  document.getElementById("entry-sound-name").value = entry.soundName || "";
   document.getElementById("entry-views").value = entry.views;
   document.getElementById("entry-likes").value = entry.likes;
   document.getElementById("entry-comments").value = entry.comments;
@@ -1366,10 +1362,30 @@ function renderInsightsLeaderboard(filteredEntries) {
     tr.innerHTML = `
       <td class="${rankClass}">${i + 1}</td>
       <td>${escapeHtml(e.date)}</td>
-      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}</td>
+      <td>${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}</td>
       <td>${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${formatPercent(engagementRate(e))}</td>
     `;
+    const dupTd = document.createElement("td");
+    dupTd.className = "duplicate-cell";
+    const dupCount = document.createElement("span");
+    dupCount.className = "duplicate-count";
+    dupCount.textContent = e.duplicateCount || 0;
+    const dupBtn = document.createElement("button");
+    dupBtn.type = "button";
+    dupBtn.className = "btn-icon duplicate-btn";
+    dupBtn.textContent = "+1";
+    dupBtn.title = "Marquer ce contenu comme dupliqué sur un autre compte";
+    dupBtn.addEventListener("click", () => {
+      const entry = entries.find((x) => x.id === e.id);
+      if (!entry) return;
+      entry.duplicateCount = (entry.duplicateCount || 0) + 1;
+      saveEntriesLocal(entries);
+      queueSync("entries", "upsert", mapEntryToDb(entry));
+      renderInsights();
+    });
+    dupTd.append(dupCount, dupBtn);
+    tr.appendChild(dupTd);
     body.appendChild(tr);
   });
 }
@@ -1412,10 +1428,9 @@ function computeDailyConversions(accountId) {
   conversions
     .filter((c) => c.accountId === accountId)
     .forEach((c) => {
-      if (!byDate[c.date]) byDate[c.date] = { linkClicks: 0, newSubs: 0, revenue: 0 };
+      if (!byDate[c.date]) byDate[c.date] = { linkClicks: 0, newSubs: 0 };
       byDate[c.date].linkClicks += Number(c.linkClicks || 0);
       byDate[c.date].newSubs += Number(c.newSubs || 0);
-      byDate[c.date].revenue += Number(c.revenue || 0);
     });
   return byDate;
 }
@@ -1547,7 +1562,6 @@ function renderConversionLogTable() {
       <td>${escapeHtml(c.date)}</td>
       <td>${Number(c.linkClicks || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(c.newSubs || 0).toLocaleString("fr-FR")}</td>
-      <td>${c.revenue ? Number(c.revenue).toLocaleString("fr-FR", { style: "currency", currency: "EUR" }) : "—"}</td>
     `;
     const delTd = document.createElement("td");
     const delBtn = document.createElement("button");
@@ -1664,6 +1678,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
     date: document.getElementById("entry-date").value,
     label: document.getElementById("entry-label").value.trim(),
     tags,
+    soundName: document.getElementById("entry-sound-name").value.trim(),
     views: document.getElementById("entry-views").value,
     likes: document.getElementById("entry-likes").value,
     comments: document.getElementById("entry-comments").value,
@@ -1679,7 +1694,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
       savedEntry = entries[idx];
     }
   } else {
-    savedEntry = { id: uid(), ...payload };
+    savedEntry = { id: uid(), duplicateCount: 0, ...payload };
     entries.push(savedEntry);
   }
   saveEntriesLocal(entries);
@@ -1716,8 +1731,7 @@ document.getElementById("conversion-form").addEventListener("submit", (e) => {
     currentAccountId,
     document.getElementById("conversion-form-date").value,
     document.getElementById("conversion-form-clicks").value,
-    document.getElementById("conversion-form-subs").value,
-    document.getElementById("conversion-form-revenue").value
+    document.getElementById("conversion-form-subs").value
   );
   e.target.reset();
   document.getElementById("conversion-form-date").value = new Date().toISOString().slice(0, 10);
