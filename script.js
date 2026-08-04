@@ -1036,7 +1036,11 @@ function renderAccountView() {
   populateTagSelects();
   document.getElementById("entry-form-submit").textContent = editingEntryId ? "Mettre à jour l'entrée" : "Enregistrer l'entrée";
   document.getElementById("entry-form-cancel").hidden = !editingEntryId;
-  renderActiveTab();
+  // resyncs which tab panel is actually visible in the DOM with `activeTab` — plain
+  // renderActiveTab() only re-renders the assumed-active panel's content, so if the DOM
+  // was left showing a different panel from the previous account, it stayed stale until
+  // the user clicked a tab button themselves
+  switchTab(activeTab);
 }
 
 // --- account info card (creation date/method, status, warm-up, notes) ------
