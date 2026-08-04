@@ -63,10 +63,16 @@
             <button type="button" class="btn-text" id="duplicate-banner-cancel">Annuler</button>
           </p>
           <form id="entry-form" class="entry-form">
-            <label>
-              Date
-              <input type="date" id="entry-date" required />
-            </label>
+            <div class="metric-grid">
+              <label>
+                Date
+                <input type="date" id="entry-date" required />
+              </label>
+              <label>
+                Heure (optionnel)
+                <input type="time" id="entry-time" />
+              </label>
+            </div>
             <label>
               Label / concept (optionnel)
               <input type="text" id="entry-label" placeholder="Ex : hook question sur les ruptures" />
@@ -288,6 +294,7 @@
             <button type="button" class="tab-btn" data-tab="insights">Insights</button>
             <button type="button" class="tab-btn" data-tab="conversion">Conversion</button>
             <button type="button" class="tab-btn" data-tab="journal">Journal</button>
+            <button type="button" class="tab-btn" data-tab="calendar">Calendrier</button>
           </nav>
 
           <section class="tab-panel" id="tab-dashboard" data-tab-panel="dashboard">
@@ -296,6 +303,21 @@
               <div class="chart-wrap chart-wrap-line">
                 <canvas id="trend-chart"></canvas>
               </div>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="tab-calendar" data-tab-panel="calendar" hidden>
+            <div class="chart-card">
+              <div class="calendar-head">
+                <button type="button" class="btn-icon" id="calendar-prev" aria-label="Mois précédent">←</button>
+                <h2 class="section-title" id="calendar-month-label"></h2>
+                <button type="button" class="btn-icon" id="calendar-next" aria-label="Mois suivant">→</button>
+              </div>
+              <div class="calendar-weekdays">
+                <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+              </div>
+              <div class="calendar-grid" id="calendar-grid"></div>
+              <p class="calendar-hint">Intensité de couleur = vues cumulées ce jour-là. Survolez une case pour le détail.</p>
             </div>
           </section>
 
@@ -336,6 +358,11 @@
               <div class="chart-card chart-card-mini">
                 <h2 class="section-title section-title-sm">Son</h2>
                 <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-son"></canvas></div>
+              </div>
+              <div class="chart-card chart-card-mini">
+                <h2 class="section-title section-title-sm">Horaire</h2>
+                <div class="chart-wrap chart-wrap-mini"><canvas id="insights-chart-time"></canvas></div>
+                <p id="insights-time-empty" class="empty-hint" style="display: none">Aucune heure enregistrée pour l'instant.</p>
               </div>
             </div>
 

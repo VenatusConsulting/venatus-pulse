@@ -993,6 +993,90 @@ body {
   height: 160px;
 }
 
+/* --- calendrier tab (posting cadence heatmap) --------------------------- */
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.calendar-head .section-title {
+  min-width: 160px;
+  text-align: center;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.calendar-day-blank {
+  background: transparent;
+  border: none;
+}
+
+.calendar-day-num {
+  font-size: 11px;
+  color: var(--ink-secondary);
+}
+
+.calendar-day-1 {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+}
+
+.calendar-day-2 {
+  background: #c7cbfa;
+  border-color: #c7cbfa;
+}
+
+.calendar-day-3 {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.calendar-day-3 .calendar-day-num {
+  color: #fff;
+}
+
+.calendar-day-4 {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.calendar-day-4 .calendar-day-num {
+  color: #fff;
+}
+
+.calendar-hint {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
 .rank-badge {
   font-weight: 700;
 }

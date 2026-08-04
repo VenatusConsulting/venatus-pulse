@@ -71,6 +71,7 @@ function migrateEntry(e) {
     id: e.id,
     accountId: e.accountId,
     date: e.date,
+    time: typeof e.time === "string" ? e.time : "",
     // old free-text `variant` becomes `label` verbatim — nothing is discarded
     label: e.label !== undefined ? e.label : e.variant || "",
     tags: {
@@ -221,6 +222,7 @@ function mapEntryToDb(e) {
     id: e.id,
     account_id: e.accountId,
     date: e.date,
+    time: e.time || "",
     label: e.label || "",
     tags: e.tags || {},
     sound_name: e.soundName || "",
@@ -241,6 +243,7 @@ function mapEntryFromDb(row) {
     id: row.id,
     accountId: row.account_id,
     date: row.date,
+    time: row.time,
     label: row.label,
     tags: row.tags,
     soundName: row.sound_name,
@@ -302,6 +305,10 @@ let insightsSort = "views"; // "views" | "engagement"
 
 // Comparer section state (on the Modèles page)
 let compareMetric = "views"; // "views" | "engagement"
+
+// Calendrier tab state — month currently displayed
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth(); // 0-11
 
 // active tab within the account view
 let activeTab = "dashboard";
@@ -1136,6 +1143,52 @@ function renderActiveTab() {
     renderConversionLogTable();
   }
   if (activeTab === "journal") renderLogTable();
+  if (activeTab === "calendar") renderCalendar();
+}
+
+const CALENDAR_MONTH_NAMES = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+];
+
+function renderCalendar() {
+  document.getElementById("calendar-month-label").textContent = `${CALENDAR_MONTH_NAMES[calendarMonth]} ${calendarYear}`;
+
+  const byDate = {};
+  entriesForAccount(currentAccountId).forEach((e) => {
+    if (!byDate[e.date]) byDate[e.date] = { count: 0, views: 0 };
+    byDate[e.date].count += 1;
+    byDate[e.date].views += Number(e.views || 0);
+  });
+  const maxViews = Math.max(0, ...Object.values(byDate).map((d) => d.views));
+
+  const grid = document.getElementById("calendar-grid");
+  grid.innerHTML = "";
+
+  const firstOfMonth = new Date(calendarYear, calendarMonth, 1);
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const leadingBlanks = (firstOfMonth.getDay() + 6) % 7; // getDay() is Sun-first; grid is Mon-first
+
+  for (let i = 0; i < leadingBlanks; i++) {
+    const blank = document.createElement("div");
+    blank.className = "calendar-day calendar-day-blank";
+    grid.appendChild(blank);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const info = byDate[dateStr];
+    let level = 0;
+    if (info) {
+      const ratio = maxViews > 0 ? info.views / maxViews : 0;
+      level = ratio > 0.75 ? 4 : ratio > 0.5 ? 3 : ratio > 0.25 ? 2 : 1;
+    }
+    const cell = document.createElement("div");
+    cell.className = `calendar-day calendar-day-${level}`;
+    cell.innerHTML = `<span class="calendar-day-num">${day}</span>`;
+    if (info) cell.title = `${info.count} reel${info.count > 1 ? "s" : ""} · ${formatCompact(info.views)} vues`;
+    grid.appendChild(cell);
+  }
 }
 
 function switchTab(tab) {
@@ -1323,6 +1376,7 @@ function startEditEntry(entryId) {
   editingEntryId = entryId;
 
   document.getElementById("entry-date").value = entry.date;
+  document.getElementById("entry-time").value = entry.time || "";
   document.getElementById("entry-label").value = entry.label || "";
   TAG_AXES.forEach((axis) => {
     const select = document.getElementById(`entry-tag-${axis}`);
@@ -1383,6 +1437,7 @@ function startDuplicateFlow(sourceEntry, targetAccountId) {
   };
   switchTab("journal");
   document.getElementById("entry-date").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("entry-time").value = "";
   document.getElementById("entry-label").value = pendingDuplicate.label;
   TAG_AXES.forEach((axis) => {
     const select = document.getElementById(`entry-tag-${axis}`);
@@ -1460,6 +1515,94 @@ function renderAxisChart(canvas, chartsStore, axis, filteredEntries, metric) {
 
 function renderInsightsAxisChart(axis, filteredEntries) {
   renderAxisChart(document.getElementById(`insights-chart-${axis}`), insightsCharts, axis, filteredEntries, insightsMetric);
+}
+
+// --- posting time breakdown (best time-of-day to publish) ------------------
+
+const TIME_BUCKETS = [
+  { key: "morning", label: "Matin (6h-12h)" },
+  { key: "afternoon", label: "Après-midi (12h-18h)" },
+  { key: "evening", label: "Soir (18h-22h)" },
+  { key: "night", label: "Nuit (22h-6h)" },
+];
+
+function timeBucketFor(entry) {
+  if (!entry.time) return null;
+  const hour = Number(entry.time.split(":")[0]);
+  if (isNaN(hour)) return null;
+  if (hour >= 6 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 18) return "afternoon";
+  if (hour >= 18 && hour < 22) return "evening";
+  return "night";
+}
+
+function computeTimeBreakdown(filteredEntries, metric) {
+  const groups = {};
+  filteredEntries.forEach((e) => {
+    const bucket = timeBucketFor(e);
+    if (!bucket) return;
+    if (!groups[bucket]) groups[bucket] = { count: 0, totalViews: 0, totalEngagement: 0 };
+    groups[bucket].count += 1;
+    groups[bucket].totalViews += Number(e.views || 0);
+    groups[bucket].totalEngagement += engagementRate(e);
+  });
+  const rows = TIME_BUCKETS.filter((b) => groups[b.key]).map((b) => ({
+    tag: b.label,
+    count: groups[b.key].count,
+    avgViews: groups[b.key].totalViews / groups[b.key].count,
+    avgEngagement: groups[b.key].totalEngagement / groups[b.key].count,
+  }));
+  rows.sort((a, b) => (metric === "engagement" ? b.avgEngagement - a.avgEngagement : b.avgViews - a.avgViews));
+  return rows;
+}
+
+function renderInsightsTimeChart(filteredEntries) {
+  const canvas = document.getElementById("insights-chart-time");
+  const emptyMsg = document.getElementById("insights-time-empty");
+  const rows = computeTimeBreakdown(filteredEntries, insightsMetric);
+
+  if (insightsCharts.time) {
+    insightsCharts.time.destroy();
+    insightsCharts.time = null;
+  }
+
+  if (rows.length === 0) {
+    canvas.style.display = "none";
+    emptyMsg.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  emptyMsg.style.display = "none";
+
+  const color = CHANNEL_COLORS[TAG_AXES.length % CHANNEL_COLORS.length];
+  const labels = rows.map((r) => r.tag);
+  const data = rows.map((r) => (insightsMetric === "engagement" ? r.avgEngagement * 100 : r.avgViews));
+
+  insightsCharts.time = new Chart(canvas, {
+    type: "bar",
+    data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 4, maxBarThickness: 18 }] },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const row = rows[ctx.dataIndex];
+              const val = insightsMetric === "engagement" ? formatPercent(row.avgEngagement) : formatCompact(row.avgViews) + " vues";
+              return `${val} moy. (${row.count} vidéo${row.count > 1 ? "s" : ""})`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_LEGEND, font: { size: 10 } }, grid: { display: false } },
+      },
+    },
+  });
 }
 
 // minimum videos sharing a tag before it's trusted enough to recommend —
@@ -1615,10 +1758,15 @@ function renderInsights() {
         insightsCharts[axis] = null;
       }
     });
+    if (insightsCharts.time) {
+      insightsCharts.time.destroy();
+      insightsCharts.time = null;
+    }
   } else {
     emptyMsg.style.display = "none";
     grid.style.display = "grid";
     TAG_AXES.forEach((axis) => renderInsightsAxisChart(axis, filtered));
+    renderInsightsTimeChart(filtered);
     renderInsightsRecipe(filtered);
   }
 
@@ -1859,6 +2007,24 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
 });
 
+document.getElementById("calendar-prev").addEventListener("click", () => {
+  calendarMonth -= 1;
+  if (calendarMonth < 0) {
+    calendarMonth = 11;
+    calendarYear -= 1;
+  }
+  renderCalendar();
+});
+
+document.getElementById("calendar-next").addEventListener("click", () => {
+  calendarMonth += 1;
+  if (calendarMonth > 11) {
+    calendarMonth = 0;
+    calendarYear += 1;
+  }
+  renderCalendar();
+});
+
 document.getElementById("add-account-btn").addEventListener("click", () => {
   const input = document.getElementById("new-account-input");
   const name = input.value.trim();
@@ -1888,6 +2054,7 @@ document.getElementById("entry-form").addEventListener("submit", (e) => {
   const payload = {
     accountId: currentAccountId,
     date: document.getElementById("entry-date").value,
+    time: document.getElementById("entry-time").value,
     label: document.getElementById("entry-label").value.trim(),
     tags,
     soundName: document.getElementById("entry-sound-name").value.trim(),
