@@ -829,18 +829,8 @@ function renderModelsView() {
       ? `${totalAccounts} compte${totalAccounts > 1 ? "s" : ""} · ${totalEntries} entrée${totalEntries > 1 ? "s" : ""} au total`
       : "Ajoute ta première modèle pour démarrer le suivi.";
 
-  const grid = document.getElementById("models-grid");
-  grid.innerHTML = "";
-
   const names = allModelNames();
   const hasOrphans = accounts.some((a) => !a.niche || !a.niche.trim());
-
-  if (names.length === 0 && !hasOrphans) {
-    grid.innerHTML = '<p class="empty-hint">Aucune modèle pour l\'instant. Clique sur "+ Nouvelle modèle" pour commencer.</p>';
-  } else {
-    names.forEach((niche) => grid.appendChild(buildModelCard(niche, niche)));
-    if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
-  }
 
   renderModelNavList(names, hasOrphans);
   renderOverviewSection();
@@ -1123,24 +1113,6 @@ function renderNicheLeaderboard() {
     `;
     body.appendChild(tr);
   });
-}
-
-function buildModelCard(niche, displayName) {
-  const accs = accountsForNiche(niche);
-  const accIds = new Set(accs.map((a) => a.id));
-  const entriesList = entries.filter((e) => accIds.has(e.accountId));
-  const totalViews = entriesList.reduce((s, e) => s + Number(e.views || 0), 0);
-
-  const card = document.createElement("div");
-  card.className = "model-card";
-  card.dataset.modelId = niche;
-  card.setAttribute("role", "button");
-  card.setAttribute("tabindex", "0");
-  card.innerHTML = `
-    <h2 class="model-card-name">${escapeHtml(displayName)}</h2>
-    <p class="model-card-stat">${accs.length} compte${accs.length > 1 ? "s" : ""} · ${formatCompact(totalViews)} vues</p>
-  `;
-  return card;
 }
 
 // --- level 1 : Modèle (tous ses comptes) -----------------------------------
@@ -2356,19 +2328,6 @@ document.getElementById("add-model-btn").addEventListener("click", () => {
     queueSync("models", "upsert", { name: trimmed });
   }
   goToModel(trimmed);
-});
-
-document.getElementById("models-grid").addEventListener("click", (e) => {
-  const card = e.target.closest("[data-model-id]");
-  if (!card) return;
-  goToModel(card.dataset.modelId);
-});
-document.getElementById("models-grid").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const card = e.target.closest("[data-model-id]");
-  if (!card) return;
-  e.preventDefault();
-  goToModel(card.dataset.modelId);
 });
 
 document.getElementById("model-accounts").addEventListener("click", (e) => {

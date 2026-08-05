@@ -461,6 +461,11 @@ body {
   margin-top: 4px;
 }
 
+#sidebar-models-list .btn-primary {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
 .btn-primary:hover {
   background: var(--accent-strong);
 }
@@ -734,50 +739,14 @@ body {
 
 /* --- level 0: modèles ---------------------------------------------------- */
 
-.models-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
-  margin-top: 18px;
-}
-
 .compare-section {
   margin-top: 40px;
 }
 
-.model-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
-  padding: 18px 20px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-
-.model-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-}
-
-.model-card:focus-visible,
 .account-card:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
-}
-
-.model-card-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0 0 6px 0;
-}
-
-.model-card-stat {
-  font-size: 12px;
-  color: var(--ink-secondary);
-  margin: 0;
 }
 
 /* --- breadcrumb ------------------------------------------------------------ */
