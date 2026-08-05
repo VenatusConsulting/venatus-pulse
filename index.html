@@ -257,6 +257,7 @@
         <div class="page-header" id="scoped-header" hidden>
           <button type="button" class="breadcrumb-back" id="breadcrumb-btn"></button>
           <h1 id="scoped-title"></h1>
+          <button type="button" class="btn-text" id="model-report-btn" hidden>📊 Voir le rapport</button>
           <p class="page-subtitle" id="scoped-subtitle"></p>
           <div class="stat-bar" id="scoped-stat-bar">
             <div class="stat-card">
@@ -508,6 +509,21 @@
               </div>
             </div>
           </section>
+        </div>
+
+        <div class="view" id="view-report" hidden>
+          <div class="report-head">
+            <button type="button" class="breadcrumb-back" id="report-back-btn"></button>
+            <h1 id="report-title"></h1>
+          </div>
+          <div class="report-grid" id="report-grid"></div>
+          <div class="chart-card">
+            <h2 class="section-title">Vues dans le temps</h2>
+            <div class="chart-wrap chart-wrap-line">
+              <canvas id="report-trend-chart"></canvas>
+            </div>
+            <p id="report-trend-empty" class="empty-hint" style="display: none">Pas encore assez de données.</p>
+          </div>
         </div>
       </main>
     </div>

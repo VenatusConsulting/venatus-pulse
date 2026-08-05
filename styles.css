@@ -927,6 +927,64 @@ body {
   margin-bottom: 24px;
 }
 
+.report-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.report-head h1 {
+  margin: 0;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.report-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+}
+
+.report-tile-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin-bottom: 8px;
+}
+
+.report-tile-value {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.report-tile-value-sm {
+  font-size: 20px;
+}
+
+.report-tile-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-tile-sub-up {
+  color: #15803d;
+}
+
+.report-tile-sub-down {
+  color: var(--danger);
+}
+
 .today-digest {
   background: var(--surface);
   border: 1px solid var(--border);

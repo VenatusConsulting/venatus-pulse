@@ -790,11 +790,23 @@ function goToAccount(accountId) {
   renderCurrentView();
 }
 
+function goToReport(niche) {
+  currentView = "report";
+  currentNiche = niche;
+  currentAccountId = null;
+  editingEntryId = null;
+  editingAccountInfo = false;
+  pendingDuplicate = null;
+  renderCurrentView();
+}
+
 function renderCurrentView() {
   document.getElementById("view-models").hidden = currentView !== "models";
-  document.getElementById("scoped-header").hidden = currentView === "models";
+  document.getElementById("scoped-header").hidden = currentView === "models" || currentView === "report";
   document.getElementById("view-model").hidden = currentView !== "model";
   document.getElementById("view-account").hidden = currentView !== "account";
+  document.getElementById("view-report").hidden = currentView !== "report";
+  document.getElementById("model-report-btn").hidden = currentView !== "model";
 
   document.getElementById("sidebar-add-account").hidden = currentView !== "model";
   document.getElementById("sidebar-new-entry").hidden = currentView !== "account";
@@ -803,6 +815,7 @@ function renderCurrentView() {
   if (currentView === "models") renderModelsView();
   else if (currentView === "model") renderModelView();
   else if (currentView === "account") renderAccountView();
+  else if (currentView === "report") renderReportView();
 }
 
 // --- level 0 : Modèles ------------------------------------------------------
@@ -1114,6 +1127,9 @@ function renderModelView() {
   breadcrumb.textContent = "← Modèles";
   breadcrumb.onclick = () => goToModels();
 
+  const reportBtn = document.getElementById("model-report-btn");
+  reportBtn.onclick = () => goToReport(niche);
+
   const stats = computeModelStats(niche);
   setStatSlot("a", "Vues totales", formatCompact(stats.totalViews));
   setStatSlot("b", "Engagement moyen", formatPercent(stats.avgEngagement));
@@ -1218,6 +1234,125 @@ function deleteAccount(accountId) {
 
   if (currentAccountId === accountId) goToModel(currentNiche);
   else renderCurrentView();
+}
+
+// --- report view: clean, jargon-free summary to show the model ------------
+
+function buildReportTile(label, value, opts = {}) {
+  const tile = document.createElement("div");
+  tile.className = "report-tile";
+  const valueClass = opts.small ? "report-tile-value report-tile-value-sm" : "report-tile-value";
+  tile.innerHTML = `
+    <div class="report-tile-label">${escapeHtml(label)}</div>
+    <div class="${valueClass}">${value}</div>
+    ${opts.sub ? `<div class="report-tile-sub ${opts.subClass || ""}">${opts.sub}</div>` : ""}
+  `;
+  return tile;
+}
+
+function renderReportView() {
+  const niche = currentNiche;
+  const displayName = niche === "" ? "Sans modèle" : niche;
+
+  const backBtn = document.getElementById("report-back-btn");
+  backBtn.textContent = `← ${displayName}`;
+  backBtn.onclick = () => goToModel(niche);
+  document.getElementById("report-title").textContent = `Rapport — ${displayName}`;
+
+  const accs = accountsForNiche(niche);
+  const accIds = new Set(accs.map((a) => a.id));
+  const entriesList = entries.filter((e) => accIds.has(e.accountId));
+
+  const grid = document.getElementById("report-grid");
+  grid.innerHTML = "";
+
+  const totalViews = entriesList.reduce((s, e) => s + Number(e.views || 0), 0);
+  grid.appendChild(buildReportTile("Vues totales", formatCompact(totalViews)));
+  grid.appendChild(buildReportTile("Reels postés", entriesList.length.toLocaleString("fr-FR")));
+
+  const last30 = entriesList.filter((e) => daysSince(e.date) < 30);
+  const prior30 = entriesList.filter((e) => daysSince(e.date) >= 30 && daysSince(e.date) < 60);
+  const last30Views = last30.reduce((s, e) => s + Number(e.views || 0), 0);
+  const prior30Views = prior30.reduce((s, e) => s + Number(e.views || 0), 0);
+  if (prior30Views > 0) {
+    const growth = Math.round(((last30Views - prior30Views) / prior30Views) * 100);
+    grid.appendChild(
+      buildReportTile("Croissance", `${growth >= 0 ? "+" : ""}${growth}%`, {
+        sub: "vs les 30j précédents",
+        subClass: growth >= 0 ? "report-tile-sub-up" : "report-tile-sub-down",
+      })
+    );
+  } else {
+    grid.appendChild(buildReportTile("Croissance", "—", { sub: "pas encore assez d'historique" }));
+  }
+
+  let bestEntry = null;
+  entriesList.forEach((e) => {
+    if (!bestEntry || Number(e.views || 0) > Number(bestEntry.views || 0)) bestEntry = e;
+  });
+  grid.appendChild(
+    buildReportTile("Meilleur reel", bestEntry ? formatCompact(Number(bestEntry.views || 0)) : "—", {
+      sub: bestEntry ? escapeHtml(entryLabel(bestEntry)) : "",
+    })
+  );
+
+  grid.appendChild(buildReportTile("Reels postés (30 derniers jours)", last30.length.toLocaleString("fr-FR")));
+  grid.appendChild(buildReportTile("Comptes gérés", accs.length.toLocaleString("fr-FR")));
+
+  renderReportTrendChart(entriesList);
+}
+
+let reportTrendChart = null;
+
+function renderReportTrendChart(entriesList) {
+  const canvas = document.getElementById("report-trend-chart");
+  const emptyMsg = document.getElementById("report-trend-empty");
+
+  const byDate = {};
+  entriesList.forEach((e) => {
+    byDate[e.date] = (byDate[e.date] || 0) + Number(e.views || 0);
+  });
+  const uniqueDates = Object.keys(byDate).sort();
+
+  if (reportTrendChart) {
+    reportTrendChart.destroy();
+    reportTrendChart = null;
+  }
+
+  if (uniqueDates.length === 0) {
+    canvas.style.display = "none";
+    emptyMsg.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  emptyMsg.style.display = "none";
+
+  reportTrendChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: uniqueDates,
+      datasets: [
+        {
+          label: "Vues",
+          data: uniqueDates.map((d) => byDate[d]),
+          borderColor: CHANNEL_COLORS[0],
+          backgroundColor: CHANNEL_COLORS[0],
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+      },
+    },
+  });
 }
 
 // --- level 2 : Compte (dashboard complet) -----------------------------------
