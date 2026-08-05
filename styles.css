@@ -205,6 +205,39 @@ body {
   flex: 1;
 }
 
+.model-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.model-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.model-nav-item:hover {
+  background: var(--surface-alt);
+}
+
+.model-nav-item-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
 /* --- segmented control -------------------------------------------------- */
 
 .segmented {

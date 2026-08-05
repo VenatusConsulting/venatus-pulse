@@ -808,6 +808,7 @@ function renderCurrentView() {
   document.getElementById("view-report").hidden = currentView !== "report";
   document.getElementById("model-report-btn").hidden = currentView !== "model";
 
+  document.getElementById("sidebar-models-list").hidden = currentView !== "models";
   document.getElementById("sidebar-add-account").hidden = currentView !== "model";
   document.getElementById("sidebar-new-entry").hidden = currentView !== "account";
   renderDuplicateBanner();
@@ -841,9 +842,36 @@ function renderModelsView() {
     if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
   }
 
+  renderModelNavList(names, hasOrphans);
   renderOverviewSection();
   renderTodayDigest();
   renderCompareSection();
+}
+
+function renderModelNavList(names, hasOrphans) {
+  const list = document.getElementById("model-nav-list");
+  list.innerHTML = "";
+
+  if (names.length === 0 && !hasOrphans) {
+    list.innerHTML = '<p class="empty-hint">Aucune modèle pour l\'instant.</p>';
+    return;
+  }
+
+  const buildItem = (niche, displayName) => {
+    const accs = accountsForNiche(niche);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "model-nav-item";
+    btn.innerHTML = `
+      <span>${escapeHtml(displayName)}</span>
+      <span class="model-nav-item-count">${accs.length}</span>
+    `;
+    btn.addEventListener("click", () => goToModel(niche));
+    return btn;
+  };
+
+  names.forEach((niche) => list.appendChild(buildItem(niche, niche)));
+  if (hasOrphans) list.appendChild(buildItem("", "Sans modèle"));
 }
 
 // --- portfolio overview (KPI cards + trend line, top of the Modèles page) --
