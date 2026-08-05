@@ -87,6 +87,9 @@ function migrateEntry(e) {
     comments: e.comments,
     shares: e.shares,
     notes: e.notes,
+    // set once you've gone back and confirmed a reel's settled stats — clears the J+7
+    // reminder for good instead of it nagging forever based purely on age
+    reviewed: e.reviewed === true,
     // stable per-account reel number, assigned once at creation and never reassigned —
     // null here means "not backfilled yet", handled by backfillEntrySeq() at load time
     seq: e.seq != null ? Number(e.seq) : null,
@@ -231,6 +234,7 @@ function mapEntryToDb(e) {
     comments: e.comments,
     shares: e.shares,
     notes: e.notes || "",
+    reviewed: e.reviewed === true,
     seq: e.seq != null ? e.seq : null,
     duplicated_from_entry_id: e.duplicatedFromEntryId || null,
     duplicated_from_account_name: e.duplicatedFromAccountName || "",
@@ -252,6 +256,7 @@ function mapEntryFromDb(row) {
     comments: row.comments,
     shares: row.shares,
     notes: row.notes,
+    reviewed: row.reviewed,
     seq: row.seq,
     duplicatedFromEntryId: row.duplicated_from_entry_id,
     duplicatedFromAccountName: row.duplicated_from_account_name,
@@ -866,12 +871,7 @@ function renderTodayDigest() {
     const inactiveDays = daysSinceLastPost(acc.id);
     if (inactiveDays !== null && inactiveDays >= 7) inactive.push({ acc, inactiveDays });
 
-    // bounded to "just crossed J+7" (7-14j) so this list stays short and actionable —
-    // the per-account Journal banner still shows the full unbounded backlog for that account
-    const staleCount = entriesForAccount(acc.id).filter((e) => {
-      const age = daysSince(e.date);
-      return age >= 7 && age < 14;
-    }).length;
+    const staleCount = entriesForAccount(acc.id).filter((e) => !e.reviewed && daysSince(e.date) >= 7).length;
     if (staleCount > 0) stale.push({ acc, staleCount });
 
     const drop = detectViewDrop(acc.id);
@@ -909,7 +909,7 @@ function renderTodayDigest() {
 
   if (stale.length > 0) {
     const group = document.createElement("div");
-    group.innerHTML = `<p class="digest-group-title">📝 Reels qui viennent de passer J+7 (${stale.length})</p>`;
+    group.innerHTML = `<p class="digest-group-title">📝 Reels en attente de vérification J+7 (${stale.length})</p>`;
     stale
       .sort((a, b) => b.staleCount - a.staleCount)
       .forEach(({ acc, staleCount }) => {
@@ -1423,7 +1423,7 @@ function renderTrendChart() {
 
 function renderReviewBanner(accountEntries) {
   const banner = document.getElementById("review-banner");
-  const staleCount = accountEntries.filter((e) => daysSince(e.date) >= 7).length;
+  const staleCount = accountEntries.filter((e) => !e.reviewed && daysSince(e.date) >= 7).length;
   if (staleCount === 0) {
     banner.hidden = true;
     return;
@@ -1457,9 +1457,7 @@ function renderLogTable() {
     const tr = document.createElement("tr");
     const isPeak = maxViews > 0 && Number(e.views || 0) === maxViews;
     const age = daysSince(e.date);
-    const ageBadge = `<span class="${age >= 7 ? "review-badge" : "day-count"}">J+${age}</span>`;
     tr.innerHTML = `
-      <td>${escapeHtml(e.date)}<br>${ageBadge}</td>
       <td>${entrySeqBadge(e)}${escapeHtml(entryLabel(e))}${tagChipsHtml(e.tags)}${soundNameHtml(e.soundName)}${duplicateOriginHtml(e)}</td>
       <td class="${isPeak ? "peak-views" : ""}">${Number(e.views || 0).toLocaleString("fr-FR")}</td>
       <td>${Number(e.likes || 0).toLocaleString("fr-FR")}</td>
@@ -1467,6 +1465,40 @@ function renderLogTable() {
       <td>${Number(e.shares || 0).toLocaleString("fr-FR")}</td>
       <td class="notes-cell">${escapeHtml(e.notes || "")}</td>
     `;
+
+    const dateTd = document.createElement("td");
+    dateTd.innerHTML = `${escapeHtml(e.date)}<br>`;
+    if (age >= 7 && !e.reviewed) {
+      const badge = document.createElement("span");
+      badge.className = "review-badge";
+      badge.textContent = `J+${age}`;
+      const reviewBtn = document.createElement("button");
+      reviewBtn.type = "button";
+      reviewBtn.className = "btn-icon mark-reviewed-btn";
+      reviewBtn.textContent = "✓";
+      reviewBtn.title = "Marquer comme vérifié";
+      reviewBtn.addEventListener("click", () => {
+        const entry = entries.find((x) => x.id === e.id);
+        if (!entry) return;
+        entry.reviewed = true;
+        saveEntriesLocal(entries);
+        queueSync("entries", "upsert", mapEntryToDb(entry));
+        renderCurrentView();
+      });
+      dateTd.append(badge, reviewBtn);
+    } else if (age >= 7) {
+      const badge = document.createElement("span");
+      badge.className = "reviewed-badge";
+      badge.textContent = "✓ Vérifié";
+      dateTd.appendChild(badge);
+    } else {
+      const badge = document.createElement("span");
+      badge.className = "day-count";
+      badge.textContent = `J+${age}`;
+      dateTd.appendChild(badge);
+    }
+    tr.insertBefore(dateTd, tr.firstChild);
+
     const actionsTd = document.createElement("td");
     actionsTd.className = "row-actions";
     const editBtn = document.createElement("button");

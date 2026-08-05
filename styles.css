@@ -1366,6 +1366,21 @@ td.peak-views {
   background: #fef3c7;
   padding: 1px 6px;
   border-radius: 10px;
+  margin-right: 4px;
+}
+
+.reviewed-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.mark-reviewed-btn {
+  width: auto;
+  padding: 0px 5px;
+  font-size: 10px;
+  line-height: 16px;
 }
 
 .review-banner {
