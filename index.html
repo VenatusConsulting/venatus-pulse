@@ -158,6 +158,33 @@
             <p class="page-subtitle" id="models-summary"></p>
           </div>
 
+          <div class="stat-bar" id="overview-stat-bar">
+            <div class="stat-card">
+              <span class="stat-label">Vues totales</span>
+              <span class="stat-value" id="overview-stat-views"></span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Engagement moyen</span>
+              <span class="stat-value" id="overview-stat-engagement"></span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Meilleur modèle</span>
+              <span class="stat-value stat-value-text" id="overview-stat-best-model"></span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Comptes actifs</span>
+              <span class="stat-value" id="overview-stat-active"></span>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <h2 class="section-title">Vues cumulées — tout le portefeuille</h2>
+            <div class="chart-wrap chart-wrap-line">
+              <canvas id="overview-trend-chart"></canvas>
+            </div>
+            <p id="overview-trend-empty" class="empty-hint" style="display: none">Pas encore assez de données.</p>
+          </div>
+
           <div class="today-digest" id="today-digest">
             <h2 class="section-title">Aujourd'hui</h2>
             <div class="today-digest-groups" id="today-digest-groups"></div>

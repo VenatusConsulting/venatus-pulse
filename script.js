@@ -294,6 +294,7 @@ function mapTagVocabFromDb(rows) {
 }
 
 let trendChart = null;
+let overviewTrendChart = null;
 let insightsCharts = {}; // { hook: Chart, format: Chart, ... }
 let compareCharts = {}; // same shape, for the cross-model Comparer section
 let conversionViewsChart = null;
@@ -827,8 +828,93 @@ function renderModelsView() {
     if (hasOrphans) grid.appendChild(buildModelCard("", "Sans modèle"));
   }
 
+  renderOverviewSection();
   renderTodayDigest();
   renderCompareSection();
+}
+
+// --- portfolio overview (KPI cards + trend line, top of the Modèles page) --
+
+function computeBestModelName() {
+  const names = allModelNames();
+  const hasOrphans = accounts.some((a) => !a.niche || !a.niche.trim());
+  const niches = hasOrphans ? [...names, ""] : names;
+
+  let best = "—";
+  let bestAvg = -1;
+  niches.forEach((niche) => {
+    const accs = accountsForNiche(niche);
+    const accIds = new Set(accs.map((a) => a.id));
+    const entriesList = entries.filter((e) => accIds.has(e.accountId));
+    if (entriesList.length === 0) return;
+    const avgViews = entriesList.reduce((s, e) => s + Number(e.views || 0), 0) / entriesList.length;
+    if (avgViews > bestAvg) {
+      bestAvg = avgViews;
+      best = niche === "" ? "Sans modèle" : niche;
+    }
+  });
+  return best;
+}
+
+function renderOverviewSection() {
+  const stats = computeStatsForEntries(entries);
+  document.getElementById("overview-stat-views").textContent = formatCompact(stats.totalViews);
+  document.getElementById("overview-stat-engagement").textContent = formatPercent(stats.avgEngagement);
+  document.getElementById("overview-stat-best-model").textContent = computeBestModelName();
+  document.getElementById("overview-stat-active").textContent = accounts.filter((a) => a.status === "actif").length;
+
+  renderOverviewTrendChart();
+}
+
+function renderOverviewTrendChart() {
+  const canvas = document.getElementById("overview-trend-chart");
+  const emptyMsg = document.getElementById("overview-trend-empty");
+
+  const byDate = {};
+  entries.forEach((e) => {
+    byDate[e.date] = (byDate[e.date] || 0) + Number(e.views || 0);
+  });
+  const uniqueDates = Object.keys(byDate).sort();
+
+  if (overviewTrendChart) {
+    overviewTrendChart.destroy();
+    overviewTrendChart = null;
+  }
+
+  if (uniqueDates.length === 0) {
+    canvas.style.display = "none";
+    emptyMsg.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  emptyMsg.style.display = "none";
+
+  overviewTrendChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: uniqueDates,
+      datasets: [
+        {
+          label: "Vues (tous comptes)",
+          data: uniqueDates.map((d) => byDate[d]),
+          borderColor: CHANNEL_COLORS[0],
+          backgroundColor: CHANNEL_COLORS[0],
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+        y: { ticks: { color: CHART_INK }, grid: { color: CHART_GRID } },
+      },
+    },
+  });
 }
 
 // --- "Aujourd'hui" digest: every account-scoped alert in one place ---------
